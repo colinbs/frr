@@ -40,6 +40,12 @@ struct graceful_restart_af {
 	uint8_t flag;
 };
 
+/* Structure for BGPsec capability negotiation. */
+struct bgpsec_cap {
+    uint8_t version_dir; /* Version and Direction bits. */
+    uint16_t afi; /* AFI. */
+};
+
 /* Capability Code */
 #define CAPABILITY_CODE_MP              1 /* Multiprotocol Extensions */
 #define CAPABILITY_CODE_REFRESH         2 /* Route Refresh Capability */
@@ -51,6 +57,7 @@ struct graceful_restart_af {
 #define CAPABILITY_CODE_ADDPATH        69 /* Addpath Capability */
 #define CAPABILITY_CODE_FQDN           73 /* Advertise hostname capability */
 #define CAPABILITY_CODE_ENHE            5 /* Extended Next Hop Encoding */
+#define CAPABILITY_CODE_BGPSEC          7 /* BGPsec Capability */
 #define CAPABILITY_CODE_REFRESH_OLD   128 /* Route Refresh Capability(cisco) */
 #define CAPABILITY_CODE_ORF_OLD       130 /* Cooperative Route Filtering Capability(cisco) */
 
@@ -64,6 +71,7 @@ struct graceful_restart_af {
 #define CAPABILITY_CODE_ENHE_LEN        6 /* NRLI AFI = 2, SAFI = 2, Nexthop AFI = 2 */
 #define CAPABILITY_CODE_MIN_FQDN_LEN    2
 #define CAPABILITY_CODE_ORF_LEN         5
+#define CAPABILITY_CODE_BGPSEC_LEN      3
 
 /* Cooperative Route Filtering Capability.  */
 
@@ -83,6 +91,17 @@ struct graceful_restart_af {
 /* Graceful Restart */
 #define RESTART_R_BIT              0x8000
 #define RESTART_F_BIT              0x80
+
+/* BGPsec Version */
+#define BGPSEC_VERSION                  0
+
+/* BGPsec Capability Directions */
+#define BGPSEC_DIR_RECEIVE              0
+#define BGPSEC_DIR_SEND                 1
+
+/* BGPsec Capability AFI */
+#define BGPSEC_AFI_IPV4                 1
+#define BGPSEC_AFI_IPV6                 2
 
 extern int bgp_open_option_parse(struct peer *, uint8_t, int *);
 extern void bgp_open_capability(struct stream *, struct peer *);
