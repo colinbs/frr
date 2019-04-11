@@ -758,6 +758,7 @@ static const struct message capcode_str[] = {
 	{CAPABILITY_CODE_ADDPATH, "AddPath"},
 	{CAPABILITY_CODE_DYNAMIC, "Dynamic"},
 	{CAPABILITY_CODE_ENHE, "Extended Next Hop Encoding"},
+    {CAPABILITY_CODE_BGPSEC, "BGPsec"},
 	{CAPABILITY_CODE_DYNAMIC_OLD, "Dynamic (Old)"},
 	{CAPABILITY_CODE_REFRESH_OLD, "Route Refresh (Old)"},
 	{CAPABILITY_CODE_ORF_OLD, "ORF (Old)"},
@@ -775,6 +776,7 @@ static const size_t cap_minsizes[] = {
 		[CAPABILITY_CODE_DYNAMIC] = CAPABILITY_CODE_DYNAMIC_LEN,
 		[CAPABILITY_CODE_DYNAMIC_OLD] = CAPABILITY_CODE_DYNAMIC_LEN,
 		[CAPABILITY_CODE_ENHE] = CAPABILITY_CODE_ENHE_LEN,
+        [CAPABILITY_CODE_BGPSEC] = CAPABILITY_CODE_BGPSEC_LEN,
 		[CAPABILITY_CODE_REFRESH_OLD] = CAPABILITY_CODE_REFRESH_LEN,
 		[CAPABILITY_CODE_ORF_OLD] = CAPABILITY_CODE_ORF_LEN,
 		[CAPABILITY_CODE_FQDN] = CAPABILITY_CODE_MIN_FQDN_LEN,
@@ -795,6 +797,7 @@ static const size_t cap_modsizes[] = {
 		[CAPABILITY_CODE_DYNAMIC] = 1,
 		[CAPABILITY_CODE_DYNAMIC_OLD] = 1,
 		[CAPABILITY_CODE_ENHE] = 6,
+        [CAPABILITY_CODE_BGPSEC] = 1
 		[CAPABILITY_CODE_REFRESH_OLD] = 1,
 		[CAPABILITY_CODE_ORF_OLD] = 1,
 		[CAPABILITY_CODE_FQDN] = 1,
@@ -864,6 +867,7 @@ static int bgp_capability_parse(struct peer *peer, size_t length,
 		case CAPABILITY_CODE_DYNAMIC_OLD:
 		case CAPABILITY_CODE_ENHE:
 		case CAPABILITY_CODE_FQDN:
+        case CAPABILITY_CODE_BGPSEC:
 			/* Check length. */
 			if (caphdr.length < cap_minsizes[caphdr.code]) {
 				zlog_info(
@@ -954,6 +958,9 @@ static int bgp_capability_parse(struct peer *peer, size_t length,
 		case CAPABILITY_CODE_FQDN:
 			ret = bgp_capability_hostname(peer, &caphdr);
 			break;
+        case CAPABILITY_CODE_BGPSEC:
+            //code
+            break;
 		default:
 			if (caphdr.code > 128) {
 				/* We don't send Notification for unknown vendor
@@ -1486,6 +1493,18 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 				peer->host, cmd_hostname_get(),
 				cmd_domainname_get());
 	}
+
+    // TODO: COPY FROM BGPSRX
+    if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND)) {
+        stream_putc(s, BGP_OPEN_OPT_CAP);
+        stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
+        stream_putc(s, CAPABILITY_CODE_BGPSEC);
+        stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
+    }
+
+    if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE)) {
+        //do stuff
+    }
 
 	/* Sending base graceful-restart capability irrespective of the config
 	 */

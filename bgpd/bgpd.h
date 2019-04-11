@@ -927,6 +927,8 @@ struct peer {
 #define PEER_FLAG_PASSWORD                  (1 << 20) /* password */
 #define PEER_FLAG_LOCAL_AS                  (1 << 21) /* local-as */
 #define PEER_FLAG_UPDATE_SOURCE             (1 << 22) /* update-source */
+#define PEER_FLAG_BGPSEC_SEND               (1 << 23) /* bgpsec send capability */
+#define PEER_FLAG_BGPSEC_RECEIVE            (1 << 24) /* bgpsec receive capability */
 
 	/* outgoing message sent in CEASE_ADMIN_SHUTDOWN notify */
 	char *tx_shutdown_message;
