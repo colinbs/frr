@@ -104,3 +104,4 @@ refix
 .vscode
 .kitchen
 .emacs.desktop*
+.editorconfig
