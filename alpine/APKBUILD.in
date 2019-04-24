@@ -19,7 +19,7 @@ makedepends="ncurses-dev net-snmp-dev gawk texinfo perl
     mpfr3 mtools musl-dev ncurses-libs ncurses-terminfo ncurses-terminfo-base
     patch pax-utils pcre perl pkgconf python2 python2-dev readline
     readline-dev sqlite-libs squashfs-tools sudo tar texinfo xorriso xz-libs
-    py-sphinx cmake openssl-dev libssh-dev"
+    py-sphinx cmake openssl-dev libssh-dev rtrlib-dev"
 checkdepends="pytest py-setuptools"
 install="$pkgname.pre-install $pkgname.pre-deinstall $pkgname.post-deinstall"
 subpackages="$pkgname-dev $pkgname-doc $pkgname-dbg"

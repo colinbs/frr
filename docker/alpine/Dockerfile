@@ -1,33 +1,7 @@
-# This stage build the rtrlib apk from source
-FROM alpine:edge as rtrlib-builder
-
-RUN echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
-	&& apk add \
-		--update-cache \
-		abuild \
-		alpine-conf \
-		alpine-sdk \
-	&& setup-apkcache /var/cache/apk \
-	&& mkdir -p /pkgs/apk \
-	&& echo 'builder ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-COPY rtrlib/APKBUILD /dist/
-RUN adduser -D -G abuild builder && chown -R builder /dist /pkgs
-USER builder
-RUN cd /dist \
-	&& abuild-keygen -a -n \
-	&& abuild checksum \
-	&& abuild -r -P /pkgs/apk
-
 # This stage builds a dist tarball from the source
 FROM alpine:edge as source-builder
 
-COPY --from=rtrlib-builder /pkgs/apk/ /pkgs/apk/
-RUN apk add \
-		--no-cache \
-		--allow-untrusted /pkgs/apk/*/*.apk \
-	&& rm -rf /pkgs \
-	&& mkdir -p /src/alpine
+RUN mkdir -p /src/alpine
 COPY alpine/APKBUILD.in /src/alpine
 RUN source /src/alpine/APKBUILD.in \
 	&& echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
@@ -60,41 +34,26 @@ RUN echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/reposit
 	&& mkdir -p /pkgs/apk \
 	&& echo 'builder ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-COPY --from=rtrlib-builder /pkgs/apk/ /pkgs/apk/
-RUN apk add \
-        --no-cache \
-        --allow-untrusted /pkgs/apk/*/*.apk \
-    && rm -rf /pkgs
-
-RUN mkdir -p /pkgs/apk
 COPY --from=source-builder /src/frr-*.tar.gz /src/alpine/* /dist/
 RUN adduser -D -G abuild builder && chown -R builder /dist /pkgs
 USER builder
 RUN cd /dist \
-    && abuild-keygen -a -n \
-    && abuild checksum \
-    && abuild -r -P /pkgs/apk
+	&& abuild-keygen -a -n \
+	&& abuild checksum \
+	&& abuild -r -P /pkgs/apk
 
 # This stage installs frr from the apk
 FROM alpine:edge
-
-RUN mkdir -p /pkgs/apk
-COPY --from=rtrlib-builder /pkgs/apk/ /pkgs/apk/
-RUN echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
-    && apk add \
-        --no-cache \
-        --allow-untrusted /pkgs/apk/*/*.apk \
-    && rm -rf /pkgs
-
 RUN mkdir -p /pkgs/apk
 COPY --from=alpine-builder /pkgs/apk/ /pkgs/apk/
-RUN apk add \
-        --no-cache \
-        --update-cache \
-        tini \
-    && apk add \
-        --no-cache \
-        --allow-untrusted /pkgs/apk/*/*.apk \
-    && rm -rf /pkgs
+RUN echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
+	&& apk add \
+		--no-cache \
+		--update-cache \
+		tini \
+	&& apk add \
+		--no-cache \
+		--allow-untrusted /pkgs/apk/*/*.apk \
+	&& rm -rf /pkgs
 COPY docker/alpine/docker-start /usr/lib/frr/docker-start
 ENTRYPOINT [ "/sbin/tini", "--", "/usr/lib/frr/docker-start" ]
