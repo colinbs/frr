@@ -42,8 +42,8 @@ struct graceful_restart_af {
 
 /* Structure for BGPsec capability negotiation. */
 struct bgpsec_cap {
-    uint8_t version_dir; /* Version and Direction bits. */
-    uint16_t afi; /* AFI. */
+	uint8_t version_dir; /* Version and Direction bits. */
+	uint16_t afi; /* AFI. */
 };
 
 /* Capability Code */
