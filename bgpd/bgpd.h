@@ -1009,6 +1009,11 @@ struct peer {
 #define PEER_CAP_ENHE_RCV                   (1 << 14) /* Extended nexthop received */
 #define PEER_CAP_HOSTNAME_ADV               (1 << 15) /* hostname advertised */
 #define PEER_CAP_HOSTNAME_RCV               (1 << 16) /* hostname received */
+#define PEER_CAP_BGPSEC_ADV                 (1 << 17) /* bgpsec advertised */
+#define PEER_CAP_BGPSEC_RCV                 (1 << 18) /* bgpsec received */
+	//TODO: what are cap and flags for?
+	//Where is the difference?
+	//When do I use what?
 
 	/* Capability flags (reset in bgp_stop) */
 	uint32_t af_cap[AFI_MAX][SAFI_MAX];
@@ -1108,8 +1113,10 @@ struct peer {
 #define PEER_FLAG_PASSWORD                  (1 << 20) /* password */
 #define PEER_FLAG_LOCAL_AS                  (1 << 21) /* local-as */
 #define PEER_FLAG_UPDATE_SOURCE             (1 << 22) /* update-source */
-#define PEER_FLAG_BGPSEC_SEND               (1 << 23) /* bgpsec send capability */
-#define PEER_FLAG_BGPSEC_RECEIVE            (1 << 24) /* bgpsec receive capability */
+#define PEER_FLAG_BGPSEC_SEND_IPV4          (1 << 23) /* bgpsec send IPv4 */
+#define PEER_FLAG_BGPSEC_SEND_IPV6          (1 << 24) /* bgpsec send IPv6 */
+#define PEER_FLAG_BGPSEC_RECEIVE_IPV4       (1 << 25) /* bgpsec receive IPv4 */
+#define PEER_FLAG_BGPSEC_RECEIVE_IPV6       (1 << 26) /* bgpsec receive IPv6 */
 
 	/* BGP-GR Peer related  flags */
 #define PEER_FLAG_GRACEFUL_RESTART_HELPER   (1 << 23) /* Helper */
@@ -1531,6 +1538,7 @@ struct bgp_nlri {
 #define BGP_ATTR_PMSI_TUNNEL                    22
 #define BGP_ATTR_ENCAP                          23
 #define BGP_ATTR_LARGE_COMMUNITIES              32
+#define BGP_ATTR_BGPSEC_PATH                    33
 #define BGP_ATTR_PREFIX_SID                     40
 #ifdef ENABLE_BGP_VNC_ATTR
 #define BGP_ATTR_VNC                           255
