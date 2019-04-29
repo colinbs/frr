@@ -1591,20 +1591,20 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 	 */
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND)) {
 		/*struct bgpsec_cap *bgpseccap;*/
-        uint8_t version_dir = 0;
-        uint16_t afi = 0;
+		uint8_t version_dir = 0;
+		uint16_t afi = 0;
 
 		stream_putc(s, BGP_OPEN_OPT_CAP);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
-        version_dir = BGPSEC_VERSION | BGPSEC_DIR_SEND;
-        afi = BGPSEC_AFI_IPV4;
+		version_dir = BGPSEC_VERSION | BGPSEC_DIR_SEND;
+		afi = BGPSEC_AFI_IPV4;
 		/*memset(bgpseccap, 0x0, sizeof(struct bgpsec_cap));*/
 		/*bgpseccap->version_dir = BGPSEC_VERSION | BGPSEC_DIR_SEND;*/
 		/*bgpseccap->afi = BGPSEC_AFI_IPV4;*/
-        stream_putc(s, version_dir);
-        stream_putw(s, afi);
+		stream_putc(s, version_dir);
+		stream_putw(s, afi);
 	}
 
 	/* BGPsec receive capability
@@ -1623,7 +1623,7 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 
 	/* BGPsec IPv6 send capability
 	 */
-    if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND)) {
+	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND)) {
 		struct bgpsec_cap *bgpseccap;
 
 		stream_putc(s, BGP_OPEN_OPT_CAP);
@@ -1633,7 +1633,7 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 		memset(bgpseccap, 0x0, sizeof(struct bgpsec_cap));
 		bgpseccap->version_dir = BGPSEC_VERSION | BGPSEC_DIR_SEND;
 		bgpseccap->afi = BGPSEC_AFI_IPV6;
-    }
+	}
 
 	/* BGPsec IPv6 receive capability
 	 */
