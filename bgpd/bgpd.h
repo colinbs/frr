@@ -1009,8 +1009,10 @@ struct peer {
 #define PEER_CAP_ENHE_RCV                   (1 << 14) /* Extended nexthop received */
 #define PEER_CAP_HOSTNAME_ADV               (1 << 15) /* hostname advertised */
 #define PEER_CAP_HOSTNAME_RCV               (1 << 16) /* hostname received */
-#define PEER_CAP_BGPSEC_ADV                 (1 << 17) /* bgpsec advertised */
-#define PEER_CAP_BGPSEC_RCV                 (1 << 18) /* bgpsec received */
+#define PEER_CAP_BGPSEC_SEND_ADV            (1 << 17) /* bgpsec send advertised */
+#define PEER_CAP_BGPSEC_SEND_RCV            (1 << 18) /* bgpsec send received */
+#define PEER_CAP_BGPSEC_RECEIVE_ADV         (1 << 19) /* bgpsec receive advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_RCV         (1 << 20) /* bgpsec receive received */
 	//TODO: what are cap and flags for?
 	//Where is the difference?
 	//When do I use what?
