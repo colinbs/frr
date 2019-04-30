@@ -97,7 +97,7 @@ struct bgpsec_cap {
 
 /* BGPsec Capability Directions */
 #define BGPSEC_DIR_RECEIVE              0
-#define BGPSEC_DIR_SEND                 8
+#define BGPSEC_DIR_SEND                 1
 #define BGPSEC_DIR_SEND_NOT_RECEIVE     1
 
 /* BGPsec Capability AFI */
