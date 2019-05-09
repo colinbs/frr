@@ -30,6 +30,8 @@
 #define AS_CONFED_SEQUENCE           3
 #define AS_CONFED_SET                4
 
+#define SKI_LENGTH                   20
+
 /* Private AS range defined in RFC2270.  */
 #define BGP_PRIVATE_AS_MIN       64512U
 #define BGP_PRIVATE_AS_MAX       65535U
@@ -55,6 +57,61 @@ struct assegment {
 	as_t *as;
 	unsigned short length;
 	uint8_t type;
+};
+
+/* BGPsec Secure_Path Segment */
+struct bgpsec_secpath {
+	struct bgpsec_secpath *next;
+	uint8_t pcount;
+	uint8_t flags;
+	as_t as;
+};
+
+/* BGPsec Signature Segment */
+struct bgpsec_sigseg {
+	struct bgpsec_sigseg *next;
+
+	/* 20 bytes Subject Key Identifier */
+	uint8_t ski[SKI_LENGTH];
+
+	/* Length of the signature */
+	uint16_t sig_len;
+
+	/* Signature in binary format */
+	uint8_t *signature;
+};
+
+struct bgpsec_sigblock {
+	/* Total length of the signature block, including length */
+	uint16_t length;
+
+	/* Algorithm Suite Identifier */
+	uint8_t afi;
+
+	/* All signature segments */
+	struct bgpsec_sigseg *sigsegs;
+};
+
+
+/* BGPsec_PATH that contains all secure paths and the signature block */
+struct bgpsec_aspath {
+	unsigned long refcnt;
+
+	/* All secure paths */
+	struct bgpsec_secpath *secpaths;
+
+	/* The signature block that contains the signature segments.
+	 * Currently, only one signature block is required. The
+	 * second block is reserved for future uses when more algorithm
+	 * suites are introduced. */
+	struct bgpsec_sigblock *sigblock1;
+
+	/* Currently not used. Reserved for future algorithm suites. */
+	struct bgpsec_sigblock *sigblock2;
+
+	/* A string representation of the whole BGPsec_PATH */
+	char *str;
+	int str_len;
 };
 
 /* AS path may be include some AsSegments.  */

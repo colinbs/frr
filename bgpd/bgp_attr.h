@@ -253,6 +253,9 @@ struct attr {
 
 	/* Link bandwidth value, if any. */
 	uint32_t link_bw;
+
+	/* BGPsec_PATH */
+	struct bgpsec_aspath *bgpsecpath;
 };
 
 /* rmap_change_flags definition */
