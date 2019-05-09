@@ -707,7 +707,7 @@ static struct test_segment bgpsec_segments[] = {
 			CAPABILITY_CODE_BGPSEC, /* cap code */
 			0x3,			/* cap length */
 			0x8,			/* version and direction (send) */
-			0x0, 0x2,		/* invalid AFI to BGPsec */
+			0x0, 0x3,		/* invalid AFI to BGPsec */
 		},
 		5,
 		SHOULD_ERR,
