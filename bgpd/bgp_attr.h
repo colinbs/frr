@@ -206,6 +206,9 @@ struct attr {
 
 	/* EVPN local router-mac */
 	struct ethaddr rmac;
+
+	/* BGPsec_PATH */
+	struct bgpsec_aspath *bgpsecpath;
 };
 
 /* rmap_change_flags definition */

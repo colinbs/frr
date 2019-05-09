@@ -2231,6 +2231,38 @@ bgp_attr_prefix_sid(int32_t tlength, struct bgp_attr_parser_args *args,
 	return BGP_ATTR_PARSE_PROCEED;
 }
 
+static bgp_attr_parse_ret_t
+bgp_attr_bgpsec_path(struct bgp_attr_parser_args *args)
+{
+	struct peer *const peer = args->peer;
+	struct attr *const attr = args->attr;
+	const bgp_size_t length = args->length;
+	struct bgpsec_aspath *bgpsecpath = NULL;
+	struct bgpsec_secpath *curr_path = NULL;
+	struct bgpsec_secpath *prev_path = NULL;
+	uint16_t sec_path_count = stream_getw(peer->curr) - 2;
+
+	bgpsecpath = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_aspath));
+
+	for (int i = 0; i < sec_path_count; i++) {
+		curr_path = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_secpath));
+
+		if (prev_path) {
+			prev_path->next = curr_path;
+		}
+
+		curr_path->pcount = stream_getc(peer->curr);
+		curr_path->flags = stream_getc(peer->curr);
+		curr_path->as = stream_getl(peer->curr);
+
+		prev_path = curr_path;
+	}
+
+	bgpsecpath->secpaths = curr_path;
+
+	args->attr->bgpsec_aspath = bgpsecpath;
+}
+
 /* PMSI tunnel attribute (RFC 6514)
  * Basic validation checks done here.
  */
@@ -2622,6 +2654,9 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 			break;
 		case BGP_ATTR_PMSI_TUNNEL:
 			ret = bgp_attr_pmsi_tunnel(&attr_args);
+			break;
+		case BGP_ATTR_BGPSEC_PATH:
+			ret = bgp_attr_bgpsec_path(&attr_args);
 			break;
 		default:
 			ret = bgp_attr_unknown(&attr_args);
