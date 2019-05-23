@@ -3641,6 +3641,12 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	int send_as4_path = 0;
 	int send_as4_aggregator = 0;
 	int use32bit = (CHECK_FLAG(peer->cap, PEER_CAP_AS4_RCV)) ? 1 : 0;
+	/* BGPsec variables */
+	int bgpsec_enabled = 1;
+	int bgpsec = 0;
+	int bgpsec_origin = 0;
+	uint8_t pcount = 0;
+	uint8_t version_dir = 0;
 
 	if (!bgp)
 		bgp = peer->bgp;
@@ -3711,23 +3717,132 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	} else
 		aspath = attr->aspath;
 
-	/* If peer is not AS4 capable, then:
-	 * - send the created AS_PATH out as AS4_PATH (optional, transitive),
-	 *   but ensure that no AS_CONFED_SEQUENCE and AS_CONFED_SET path
-	 * segment
-	 *   types are in it (i.e. exclude them if they are there)
-	 *   AND do this only if there is at least one asnum > 65535 in the
-	 * path!
-	 * - send an AS_PATH out, but put 16Bit ASnums in it, not 32bit, and
-	 * change
-	 *   all ASnums > 65535 to BGP_AS_TRANS
-	 */
+	if (bgpsec_enabled) {
+		/* Check, if the peer can receive bgpsec updates, and we
+		 * can also send bgpsec updates */
+		if (CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV)
+		    && (CHECK_FLAG(peer->flag, PEER_FLAG_BGPSEC_SEND_IPV4)
+			|| CHECK_FLAG(peer->flag, PEER_FLAG_BGPSEC_SEND_IPV6)))
+		{
+			//TODO: only eBGP is covered right now.
+			if (peer->sort == BGP_PEER_EBGP) {
+				bgpsec = 1;
+				/* Set the confed flag if required */
+				if (peer->sort == BGP_PEER_CONFED) {
+					version_dir = 0x80;
+				}
+				/* Set the pCount to the appropriate value */
+				//TODO: AS migration and pCounts > 1 are
+				// currently ignored.
+				if (peer->sort != BGP_PEER_CONFED) {
+					pcount = 0;
+				}
 
-	stream_putc(s, BGP_ATTR_FLAG_TRANS | BGP_ATTR_FLAG_EXTLEN);
-	stream_putc(s, BGP_ATTR_AS_PATH);
-	aspath_sizep = stream_get_endp(s);
-	stream_putw(s, 0);
-	stream_putw_at(s, aspath_sizep, aspath_put(s, aspath, use32bit));
+				/* Begin the signing process */
+				
+				/* This is the secure path segment of the local AS */
+				struct rtr_secure_path_seg secpath;
+				secpath.pcount = pcount;
+				secpath.flags = version_dir;
+				secpath.as = ntohl(bgp->as);
+
+				/* If the BGPsec_PATH has not been used before,
+				 * then this is an origin UPDATE. */
+				if (attr->bgpsecpath == NULL) {
+					bgpsec_origin = 1;
+					/* If this in indeed an origin UPDATE, allocate
+					 * memory for the bgpsec_aspath structure */
+					attr->bgpsecpath = XMALLOC(MTYPE_ATTR,
+								   sizeof(struct bgpsec_aspath));
+				}
+
+				if (bgpsec_origin) {
+					//TODO: do origin stuff here
+				} else {
+					//TODO: only the first signature block is
+					// used right now.
+					struct rtr_signature_seg sigseg;
+					struct rtr_bgpsec_data data;
+					struct lrtr_ip_addr ip_addr;
+					uint32_t target_as = peer->as;
+					uint8_t *signature = XMALLOC(MTYPE_BGPSEC_PATH, 72);
+
+					data->alg_suite_id = attr->bgpsec_aspath->sigblock1->alg;
+					data->afi = afi;
+					data->safi = safi;
+					data->asn = bgp->as;
+					ip_addr.prefix_len = p->prefixlen;
+					switch (afi) {
+					case AFI_IP:
+						ip_addr.prefix.ver = LRTR_IPV4;
+						ip_addr.prefix.u.addr4.addr = p->u.prefix4.s_addr;
+						break;
+					case AFI_IP6:
+						ip_addr.prefix.ver = LRTR_IPV6;
+						ip_addr.prefix.u.addr6.addr = p->u.prefix6.s6_addr32;
+						break;
+					default:
+						//TODO: catch error here. Should be caught before
+						// doing BGPsec stuff, though.
+					}
+					data->nlri = ip_addr;
+
+					/* Assemble all secure path segments, if there are any */
+					/* First secure path */
+					struct bgpsec_secpath *curr = attr->bgpsec_aspath->secpaths;
+
+					//TODO: make this a macro.
+					int seg_len = 0;
+					while (curr) {
+						seg_len++;
+						curr = curr->next;
+					}
+					curr = attr->bgpsec_aspath->secpaths;
+					struct rtr_secure_path_seg *all_segs = XMALLOC(MTYPE_BGPSEC_PATH,
+										sizeof(rtr_secure_path_seg) * seg_len);
+					while (curr) {
+						struct rtr_secure_path_seg seg = {
+							curr->pcount,
+							curr->flags,
+							curr->as
+						}
+						memcpy(all_segs, &seg, sizeof(struct rtr_secure_path_seg));
+						all_segs += sizeof(struct rtr_secure_path_seg);
+						curr = curr->next;
+					}
+					
+					rtr_mgr_bgpsec_generate_signature(&data,
+									  NULL,
+								      	  NULL,
+								      	  0,
+								      	  secpath,
+								      	  target_as,
+								      	  bgp->priv_key,
+								      	  signature);
+				}
+			}
+		}
+	}
+
+	if (!bgpsec) {
+		/* If peer is not AS4 capable, then:
+		 * - send the created AS_PATH out as AS4_PATH (optional, transitive),
+		 *   but ensure that no AS_CONFED_SEQUENCE and AS_CONFED_SET path
+		 * segment
+		 *   types are in it (i.e. exclude them if they are there)
+		 *   AND do this only if there is at least one asnum > 65535 in the
+		 * path!
+		 * - send an AS_PATH out, but put 16Bit ASnums in it, not 32bit, and
+		 * change
+		 *   all ASnums > 65535 to BGP_AS_TRANS
+		 */
+
+		stream_putc(s, BGP_ATTR_FLAG_TRANS | BGP_ATTR_FLAG_EXTLEN);
+		stream_putc(s, BGP_ATTR_AS_PATH);
+		aspath_sizep = stream_get_endp(s);
+		stream_putw(s, 0);
+		stream_putw_at(s, aspath_sizep, aspath_put(s, aspath, use32bit));
+	}
 
 	/* OLD session may need NEW_AS_PATH sent, if there are 4-byte ASNs
 	 * in the path

@@ -669,6 +669,12 @@ struct bgp {
 	/* Weighted ECMP related config. */
 	enum bgp_link_bw_handling lb_handling;
 
+	/* Subject Key Identifier of the private BGPsec key */
+	uint8_t ski[SKI_LENGTH];
+
+	/* Private BGPsec key */
+	uint8_t *priv_key;
+
 	QOBJ_FIELDS
 };
 DECLARE_QOBJ_TYPE(bgp)

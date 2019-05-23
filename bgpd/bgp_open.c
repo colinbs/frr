@@ -778,11 +778,12 @@ static int bgp_capability_bgpsec(struct peer *peer,
 	if ((version_dir | (BGPSEC_DIR_RECEIVE << 3)) == 0) {
 		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV);
 
-		if (afi == BGPSEC_AFI_IPV4) {
-			SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);
-		} else if (afi == BGPSEC_AFI_IPV6) {
-			SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);
-		} else {
+		//TODO: The flags are set by the user via the vty for a certain peer.
+		/*if (afi == BGPSEC_AFI_IPV4) {*/
+			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);*/
+		/*} else if (afi == BGPSEC_AFI_IPV6) {*/
+			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);*/
+		/*} else {*/
 			//TODO: gives strange error code output in test.
 			flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
 				 "BGPSEC: received invalid AFI %d in capability",
@@ -801,11 +802,12 @@ static int bgp_capability_bgpsec(struct peer *peer,
 	if (version_dir & (BGPSEC_DIR_SEND << 3)) {
 		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_RCV);
 
-		if (afi == BGPSEC_AFI_IPV4) {
-			SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);
-		} else if (afi == BGPSEC_AFI_IPV6) {
-			SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);
-		} else {
+		//TODO: The flags are set by the user via the vty for a certain peer.
+		/*if (afi == BGPSEC_AFI_IPV4) {*/
+			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);*/
+		/*} else if (afi == BGPSEC_AFI_IPV6) {*/
+			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);*/
+		/*} else {*/
 			//TODO: gives strange error code output in test.
 			flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
 				 "BGPSEC: received invalid AFI %d in capability",
