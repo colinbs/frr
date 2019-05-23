@@ -568,6 +568,12 @@ struct bgp {
 	/* Count of peers in established state */
 	uint32_t established_peers;
 
+	/* Subject Key Identifier of the private BGPsec key */
+	uint8_t ski[SKI_LENGTH];
+
+	/* Private BGPsec key */
+	uint8_t *priv_key;
+
 	QOBJ_FIELDS
 };
 DECLARE_QOBJ_TYPE(bgp)

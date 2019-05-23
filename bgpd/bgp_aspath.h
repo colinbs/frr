@@ -85,7 +85,7 @@ struct bgpsec_sigblock {
 	uint16_t length;
 
 	/* Algorithm Suite Identifier */
-	uint8_t afi;
+	uint8_t alg;
 
 	/* All signature segments */
 	struct bgpsec_sigseg *sigsegs;
