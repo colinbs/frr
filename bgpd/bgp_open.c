@@ -789,7 +789,7 @@ static int bgp_capability_bgpsec(struct peer *peer,
 				 "BGPSEC: received invalid AFI %d in capability",
 				 afi);
 			return -1;
-		}
+		/*}*/
 
 		if (bgp_debug_neighbor_events(peer)) {
 			zlog_debug("%s BGPSEC: Receive Capability received for AFI %d",
@@ -813,7 +813,7 @@ static int bgp_capability_bgpsec(struct peer *peer,
 				 "BGPSEC: received invalid AFI %d in capability",
 				 afi);
 			return -1;
-		}
+		/*}*/
 
 		if (bgp_debug_neighbor_events(peer)) {
 			zlog_debug("%s BGPSEC: Send Capability received for AFI %u",

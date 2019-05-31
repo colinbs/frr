@@ -34,6 +34,13 @@
 #define CHECK_BITMAP(MAP, NUM)                                                 \
 	CHECK_FLAG(MAP[(NUM) / BITMAP_NBBY], 1 << ((NUM) % BITMAP_NBBY))
 
+#define SEC_PATH_LEN(seg, idx)                                                 \
+	struct bgpsec_secpath *tmp = seg;                                          \
+	while (tmp) {                                                              \
+		idx++;                                                                 \
+		tmp = tmp->next;                                                       \
+	}
+
 #define BGP_MED_MAX UINT32_MAX
 
 /* BGP Attribute type range. */
