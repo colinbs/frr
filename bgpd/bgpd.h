@@ -41,6 +41,11 @@
 #include "bgp_labelpool.h"
 #include "bgp_addpath_types.h"
 
+/* For RPKI */
+#include "rtrlib/rtrlib.h"
+#include "rtrlib/rtr_mgr.h"
+#include "rtrlib/bgpsec/bgpsec.h"
+
 #define BGP_MAX_HOSTNAME 64	/* Linux max, is larger than most other sys */
 #define BGP_PEER_MAX_HASH_SIZE 16384
 
@@ -569,7 +574,7 @@ struct bgp {
 	uint32_t established_peers;
 
 	/* Subject Key Identifier of the private BGPsec key */
-	uint8_t ski[SKI_LENGTH];
+	uint8_t ski[SKI_SIZE];
 
 	/* Private BGPsec key */
 	uint8_t *priv_key;
