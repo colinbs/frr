@@ -3695,7 +3695,8 @@ static bool bgp_append_local_as(struct peer *peer, afi_t afi, safi_t safi)
 #ifdef ASDFASDDF
 int gen_bgpsec_sig(struct peer *peer,
                    struct attr *attr,
-                   struct bgp *bgp)
+                   struct bgp *bgp,
+		   struct prefix *p)
 {
 	struct rtr_secure_path_seg secpath;
 	struct rtr_signature_seg sigseg;
@@ -3794,13 +3795,13 @@ int gen_bgpsec_sig(struct peer *peer,
 					attr->bgpsec_aspath->secpaths = all_segs;
 					
 					int sig_len = rtr_mgr_bgpsec_generate_signature(&data,
-																    bgpsec_aspath->sigblock1->sigsegs,
-																    all_segs,
-																    seg_len,
-																    secpath,
-																    target_as,
-																    bgp->priv_key,
-																    &signature);
+										        bgpsec_aspath->sigblock1->sigsegs,
+										        all_segs,
+										        seg_len,
+										        secpath,
+										        target_as,
+										        bgp->priv_key,
+										        &signature);
 					if (sig_len < 1) {
 						//TODO: error handling if sig gen failed.
 					}
@@ -3812,7 +3813,7 @@ int gen_bgpsec_sig(struct peer *peer,
 			}
 		}
 	}
-    return 0;
+	return 0;
 }
 #endif
 
