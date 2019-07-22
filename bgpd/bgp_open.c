@@ -42,6 +42,9 @@
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_memory.h"
 
+DEFINE_HOOK(bgp_put_bgpsec_cap, (struct stream *s, struct peer *peer), (s, peer))
+DEFINE_HOOK(bgp_capability_bgpsec, (struct peer *peer, struct capability_header *hdr), (peer, hdr))
+
 /* BGP-4 Multiprotocol Extentions lead us to the complex world. We can
    negotiate remote peer supports extentions or not. But if
    remote-peer doesn't supports negotiation process itself.  We would
@@ -756,74 +759,6 @@ static int bgp_capability_hostname(struct peer *peer,
 	return 0;
 }
 
-static int bgp_capability_bgpsec(struct peer *peer,
-				 struct capability_header *hdr)
-{
-	struct stream *s = BGP_INPUT(peer);
-	uint8_t version_dir = 0;
-	uint16_t afi = 0;
-
-	version_dir = stream_getc(s);
-	afi = stream_getw(s);
-
-	if (hdr->length != CAPABILITY_CODE_BGPSEC_LEN) {
-		flog_err(EC_BGP_CAPABILITY_INVALID_LENGTH,
-			 "BGPSEC: received invalid capability header length %d",
-			 hdr->length);
-		return -1;
-	}
-
-	/* check, if the receive capability is set for IPv4/6
-	 */
-	if ((version_dir | (BGPSEC_DIR_RECEIVE << 3)) == 0) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV);
-
-		//TODO: The flags are set by the user via the vty for a certain peer.
-		/*if (afi == BGPSEC_AFI_IPV4) {*/
-			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);*/
-		/*} else if (afi == BGPSEC_AFI_IPV6) {*/
-			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);*/
-		/*} else {*/
-			//TODO: gives strange error code output in test.
-			flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
-				 "BGPSEC: received invalid AFI %d in capability",
-				 afi);
-			return -1;
-		/*}*/
-
-		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug("%s BGPSEC: Receive Capability received for AFI %d",
-				   peer->host, afi);
-		}
-	}
-
-	/* check, if the send capability is set set for IPv4/6
-	 */
-	if (version_dir & (BGPSEC_DIR_SEND << 3)) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_RCV);
-
-		//TODO: The flags are set by the user via the vty for a certain peer.
-		/*if (afi == BGPSEC_AFI_IPV4) {*/
-			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);*/
-		/*} else if (afi == BGPSEC_AFI_IPV6) {*/
-			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);*/
-		/*} else {*/
-			//TODO: gives strange error code output in test.
-			flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
-				 "BGPSEC: received invalid AFI %d in capability",
-				 afi);
-			return -1;
-		/*}*/
-
-		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug("%s BGPSEC: Send Capability received for AFI %u",
-				   peer->host, afi);
-		}
-	}
-
-	return 0;
-}
-
 static const struct message capcode_str[] = {
 	{CAPABILITY_CODE_MP, "MultiProtocol Extensions"},
 	{CAPABILITY_CODE_REFRESH, "Route Refresh"},
@@ -1034,8 +969,11 @@ static int bgp_capability_parse(struct peer *peer, size_t length,
 		case CAPABILITY_CODE_FQDN:
 			ret = bgp_capability_hostname(peer, &caphdr);
 			break;
+		// BGPsecHook to parse capability.
 		case CAPABILITY_CODE_BGPSEC:
-			ret = bgp_capability_bgpsec(peer, &caphdr);
+			ret = hook_call(bgp_capability_bgpsec, peer, &caphdr);
+			if (ret)
+				ret = -1;
 			break;
 		default:
 			if (caphdr.code > 128) {
@@ -1465,8 +1403,6 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 	as_t local_as;
 	uint8_t afi_safi_count = 0;
 	int adv_addpath_tx = 0;
-	uint8_t bgpsec_version_dir = 0;
-	uint16_t bgpsec_afi = 0;
 
 	/* Remember current pointer for Opt Parm Len. */
 	cp = stream_get_endp(s);
@@ -1657,80 +1593,8 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 				cmd_domainname_get());
 	}
 
-	/* BGPsec IPv4 send capability
-	 */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_ADV);
-		stream_putc(s, BGP_OPEN_OPT_CAP);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN);
-		bgpsec_version_dir = ((BGPSEC_VERSION << 4) | (BGPSEC_DIR_SEND << 3));
-		bgpsec_afi = BGPSEC_AFI_IPV4;
-		stream_putc(s, bgpsec_version_dir);
-		stream_putw(s, bgpsec_afi);
-		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
-				"%s BGPSEC: sending Send Capability for AFI IPv4",
-				peer->host);
-		}
-	}
-
-	/* BGPsec IPv4 receive capability
-	 */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4)) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_ADV);
-		stream_putc(s, BGP_OPEN_OPT_CAP);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN);
-		bgpsec_version_dir = ((BGPSEC_VERSION << 4) | (BGPSEC_DIR_RECEIVE << 3));
-		bgpsec_afi = BGPSEC_AFI_IPV4;
-		stream_putc(s, bgpsec_version_dir);
-		stream_putw(s, bgpsec_afi);
-		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
-				"%s BGPSEC: sending Receive Capability for AFI IPv4",
-				peer->host);
-		}
-	}
-
-	//TODO: check if ipv6 capable
-	/* BGPsec IPv6 send capability
-	 */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)) {
-		stream_putc(s, BGP_OPEN_OPT_CAP);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN);
-		bgpsec_version_dir = ((BGPSEC_VERSION << 4) | (BGPSEC_DIR_SEND << 3));
-		bgpsec_afi = BGPSEC_AFI_IPV6;
-		stream_putc(s, bgpsec_version_dir);
-		stream_putw(s, bgpsec_afi);
-		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
-				"%s BGPSEC: sending Send Capability for AFI IPv6",
-				peer->host);
-		}
-	}
-
-	/* BGPsec IPv6 receive capability
-	 */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6)) {
-		stream_putc(s, BGP_OPEN_OPT_CAP);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC);
-		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN);
-		bgpsec_version_dir = ((BGPSEC_VERSION << 4) | (BGPSEC_DIR_RECEIVE << 3));
-		bgpsec_afi = BGPSEC_AFI_IPV6;
-		stream_putc(s, bgpsec_version_dir);
-		stream_putw(s, bgpsec_afi);
-		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
-				"%s BGPSEC: sending Receive Capability for AFI IPv6",
-				peer->host);
-		}
-	}
+	// BGPsecHook to write capabilities.
+	hook_call(bgp_put_bgpsec_cap, s, peer);
 
 	/* Sending base graceful-restart capability irrespective of the config
 	 */

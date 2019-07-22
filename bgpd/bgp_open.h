@@ -110,4 +110,8 @@ extern void bgp_capability_vty_out(struct vty *vty, struct peer *peer,
 				   bool use_json, json_object *json_neigh);
 extern as_t peek_for_as4_capability(struct peer *, uint8_t);
 
+#include "hook.h"
+DECLARE_HOOK(bgp_put_bgpsec_cap, (struct stream *s, struct peer *peer), (s, peer))
+DECLARE_HOOK(bgp_capability_bgpsec, (struct peer *peer, struct capability_header *hdr), (peer, hdr))
+
 #endif /* _QUAGGA_BGP_OPEN_H */
