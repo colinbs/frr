@@ -425,8 +425,9 @@ static inline uint32_t mac_mobility_seqnum(struct attr *attr)
 
 #include "hook.h"
 DECLARE_HOOK(bgp_gen_bgpsec_sig,
-		(struct peer *peer, struct attr *attr, struct bgp *bgp, struct prefix *p, uint8_t **signature),
-		(peer, attr, bgp, p, signature))
+		(struct peer *peer, struct attr *attr, struct bgp *bgp,
+		 struct prefix *p, uint8_t **signature, uint16_t *sig_len),
+		(peer, attr, bgp, p, signature, sig_len))
 DECLARE_HOOK(bgp_attr_bgpsec_path, (struct bgp_attr_parser_args *args), (args))
 
 #endif /* _QUAGGA_BGP_ATTR_H */

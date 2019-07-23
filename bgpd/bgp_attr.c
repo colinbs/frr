@@ -57,8 +57,9 @@
 #include "bgp_mac.h"
 
 DEFINE_HOOK(bgp_gen_bgpsec_sig,
-		(struct peer *peer, struct attr *attr, struct bgp *bgp, struct prefix *p, uint8_t **signature),
-		(peer, attr, bgp, p, signature))
+		(struct peer *peer, struct attr *attr, struct bgp *bgp,
+		 struct prefix *p, uint8_t **signature, uint16_t *sig_len),
+		(peer, attr, bgp, p, signature, sig_len))
 DEFINE_HOOK(bgp_attr_bgpsec_path, (struct bgp_attr_parser_args *args), (args))
 
 /* Attribute strings for logging. */
@@ -3618,11 +3619,7 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	int send_as4_aggregator = 0;
 	int use32bit = (CHECK_FLAG(peer->cap, PEER_CAP_AS4_RCV)) ? 1 : 0;
 	/* BGPsec variables */
-	int bgpsec_enabled = 1;
-	int bgpsec = 0;
-	int bgpsec_origin = 0;
-	uint8_t pcount = 0;
-	uint8_t version_dir = 0;
+	int use_bgpsec = 0;
 
 	if (!bgp)
 		bgp = peer->bgp;
@@ -3693,11 +3690,7 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	} else
 		aspath = attr->aspath;
 
-	// BGPsecHook to generate a signature
-	uint8_t *signature = XMALLOC(MTYPE_ATTR, 72);
-	hook_call(bgp_gen_bgpsec_sig, peer, attr, bgp, p, &signature);
-
-	if (!bgpsec) {
+	if (!use_bgpsec) {
 		/* If peer is not AS4 capable, then:
 		 * - send the created AS_PATH out as AS4_PATH (optional, transitive),
 		 *   but ensure that no AS_CONFED_SEQUENCE and AS_CONFED_SET path
@@ -3717,12 +3710,44 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		stream_putw_at(s, aspath_sizep, aspath_put(s, aspath, use32bit));
 	}
 
+
+
+    ///DELETEME
+    } else if (send_as4_path) {
+		/* If the peer is NOT As4 capable, AND */
+		/* there are ASnums > 65535 in path  THEN
+		 * give out AS4_PATH */
+
+		/* Get rid of all AS_CONFED_SEQUENCE and AS_CONFED_SET
+		 * path segments!
+		 * Hm, I wonder...  confederation things *should* only be at
+		 * the beginning of an aspath, right?  Then we should use
+		 * aspath_delete_confed_seq for this, because it is already
+		 * there! (JK)
+		 * Folks, talk to me: what is reasonable here!?
+		 */
+		aspath = aspath_delete_confed_seq(aspath);
+
+		stream_putc(s,
+			    BGP_ATTR_FLAG_TRANS | BGP_ATTR_FLAG_OPTIONAL
+				    | BGP_ATTR_FLAG_EXTLEN);
+		stream_putc(s, BGP_ATTR_AS4_PATH);
+		aspath_sizep = stream_get_endp(s);
+		stream_putw(s, 0);
+		stream_putw_at(s, aspath_sizep, aspath_put(s, aspath, 1));
+    ///DELETEME
+
+
+
 	/* OLD session may need NEW_AS_PATH sent, if there are 4-byte ASNs
 	 * in the path
 	 */
 	if (!use32bit && aspath_has_as4(aspath))
 		send_as4_path =
 			1; /* we'll do this later, at the correct place */
+
+    if (!send_as4_path)
+        use_bgpsec = 0; /* Only use BGPsec if 4-byte ASNs are compatible */
 
 	/* Nexthop attribute. */
 	if (afi == AFI_IP && safi == SAFI_UNICAST
@@ -4021,7 +4046,26 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	}
 
 	// BGPsecHook to append path to packet.
-	if (send_as4_path) {
+    if (use_bgpsec) {
+        uint8_t *signature = NULL;
+        uint16_t sig_len = 0;
+        struct aspath *bgpsec_aspath = NULL;
+        int *bgpsec_pathlen = XMALLOC(MTYPE_ATTR, sizeof(int));
+
+        // BGPsecHook to generate a signature
+        hook_call(bgp_gen_bgpsec_sig, peer, attr, bgp, p, &signature, &sig_len);
+
+        if (!signature) {
+            // abort
+        }
+
+        /* Create a copy of the current aspath */
+        bgpsec_aspath = aspath_dup(aspath);
+
+        // BGPsecHook to write BGPsec data to stream.
+        hook_call(bgp_write_bgpsec_aspath_to_stream, s, attr->bgpsec_aspath,
+                  bgpsec_pathlen);
+    } else if (send_as4_path) {
 		/* If the peer is NOT As4 capable, AND */
 		/* there are ASnums > 65535 in path  THEN
 		 * give out AS4_PATH */
@@ -4040,6 +4084,7 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 			    BGP_ATTR_FLAG_TRANS | BGP_ATTR_FLAG_OPTIONAL
 				    | BGP_ATTR_FLAG_EXTLEN);
 		stream_putc(s, BGP_ATTR_AS4_PATH);
+            
 		aspath_sizep = stream_get_endp(s);
 		stream_putw(s, 0);
 		stream_putw_at(s, aspath_sizep, aspath_put(s, aspath, 1));
