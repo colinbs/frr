@@ -90,6 +90,9 @@ struct bgpsec_sigblock {
 
 	/* All signature segments */
 	struct bgpsec_sigseg *sigsegs;
+
+    /* Count of signature segments */
+    uint16_t sig_count;
 };
 
 
@@ -99,6 +102,9 @@ struct bgpsec_aspath {
 
 	/* All secure paths */
 	struct bgpsec_secpath *secpaths;
+
+    /* Count of secure path segments */
+    uint16_t path_count;
 
 	/* The signature block that contains the signature segments.
 	 * Currently, only one signature block is required. The
@@ -205,5 +211,11 @@ extern void bgp_remove_aspath_from_aggregate_hash(
 						struct aspath *aspath);
 
 extern void bgp_aggr_aspath_remove(void *arg);
+
+extern struct bgpsec_aspath *bgpsec_aspath_new(void);
+
+extern struct bgpsec_sigblock *bgpsec_sigblock_new(void);
+
+extern struct bgpsec_sigseg *bgpsec_sigseg_new(void);
 
 #endif /* _QUAGGA_BGP_ASPATH_H */

@@ -67,6 +67,8 @@
 #include "bgpd/bgp_bgpsec_clippy.c"
 #endif
 
+#define BGPSEC_SECURE_PATH_SEGMENT_SIZE 6
+
 DEFINE_MTYPE_STATIC(BGPD, BGP_BGPSEC_VALIDATION, "BGP BGPsec AS path validation")
 
 static int capability_bgpsec(struct peer *peer,
@@ -76,13 +78,20 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer);
 
 static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
 			  struct bgp *bgp, struct prefix *p,
-			  uint8_t **signature, uint16_t *sig_len);
+              struct bgpsec_secpath *own_secpath,
+			  struct bgpsec_sigseg **own_sigseg);
 
 static int attr_bgpsec_path(struct bgp_attr_parser_args *args);
 
 static int write_bgpsec_aspath_to_stream(struct stream *s,
                                          struct bgpsec_aspath *aspath,
-                                         int *length);
+                                         int *bgpsec_attrlen,
+                                         struct bgpsec_secpath own_secpath,
+                                         struct bgpsec_sigseg *own_sigseg)
+
+struct bgpsec_aspath *bgpsc_aspath_new(void);
+
+struct bgpsec_sigblock *bgpsec_sigblock_new(void);
 
 static void *malloc_wrapper(size_t size)
 {
@@ -251,7 +260,8 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 
 static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
 			  struct bgp *bgp, struct prefix *p,
-			  uint8_t **signature, uint16_t *sig_len)
+              struct bgpsec_secpath *own_secpath,
+			  struct bgpsec_sigseg **own_sigseg)
 {
 	struct rtr_bgpsec *bgpsec = NULL;
 	struct rtr_bgpsec_nlri *pfx = NULL;
@@ -260,127 +270,113 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
 	struct rtr_secure_path_seg *my_sps = NULL;
 	struct rtr_signature_seg *new_ss = NULL;
 
-	uint8_t flags = 0;
-	uint8_t pcount = 0;
 	uint16_t afi = 0;
 
 	int bgpsec_origin = 0;
 	int retval = 0;
 
-	/* Check, if the peer can receive bgpsec updates, and we
-	 * can also send bgpsec updates */
-	if (CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV)
-	    && (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
-		|| CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)))
-	{
-		//TODO: only eBGP is covered right now.
-		if (peer->sort == BGP_PEER_EBGP) {
-			/* Set the confed flag if required */
-			if (peer->sort == BGP_PEER_CONFED) {
-				flags = 0x80;
-			}
-			/* Set the pCount to the appropriate value */
-			//TODO: AS migration and pCounts > 1 are
-			// currently ignored.
-			if (peer->sort != BGP_PEER_CONFED) {
-				pcount = 0;
-			}
+    /* Begin the signing process */
 
-			/* Begin the signing process */
+    /* This is the secure path segment of the local AS */
+    my_sps = rtr_mgr_bgpsec_new_secure_path_seg(
+                                        own_secpath->pcount,
+                                        own_secpath->flags,
+                                        ntohl(own_secpath->as));
 
-			/* This is the secure path segment of the local AS */
-			my_sps = rtr_mgr_bgpsec_new_secure_path_seg(pcount,
-								    flags,
-								    ntohl(bgp->as));
+    /* If the BGPsec_PATH has not been used before,
+     * then this is an origin UPDATE. */
+    if (attr->bgpsecpath == NULL) {
+        bgpsec_origin = 1;
+        /* If this in indeed an origin UPDATE, allocate
+         * memory for the bgpsec_aspath structure */
+        attr->bgpsecpath = XMALLOC(MTYPE_ATTR,
+                        sizeof(struct bgpsec_aspath));
+    }
 
-			/* If the BGPsec_PATH has not been used before,
-			 * then this is an origin UPDATE. */
-			if (attr->bgpsecpath == NULL) {
-				bgpsec_origin = 1;
-				/* If this in indeed an origin UPDATE, allocate
-				 * memory for the bgpsec_aspath structure */
-				attr->bgpsecpath = XMALLOC(MTYPE_ATTR,
-								sizeof(struct bgpsec_aspath));
-			}
+    //TODO: only the first signature block is
+    // used right now.
 
-			//TODO: only the first signature block is
-			// used right now.
+    /* Assign all necessary values to the data struct */
 
-			/* Assign all necessary values to the data struct */
+    /* Use RTRlib struct to store the prefix, AFI and length.
+     * Store a IPv4/6 address according to the AFI. */
+    pfx = XMALLOC(MTYPE_AS_PATH, sizeof(struct rtr_bgpsec_nlri));
+    pfx->prefix_len = p->prefixlen;
+    afi = family2afi(p->family);
+    switch (afi) {
+    case AFI_IP:
+        pfx->prefix.ver = LRTR_IPV4;
+        pfx->prefix.u.addr4.addr = p->u.prefix4.s_addr;
+        break;
+    case AFI_IP6:
+        pfx->prefix.ver = LRTR_IPV6;
+        memcpy(&pfx->prefix.u.addr6.addr, &p->u.prefix6.s6_addr32,
+                sizeof(uint32_t) * 4);
+        break;
+    default:
+        //TODO: catch error here. Should be caught before
+        // doing BGPsec stuff, though.
+        break;
+    }
 
-			/* Use RTRlib struct to store the prefix, AFI and length.
-			 * Store a IPv4/6 address according to the AFI. */
-            pfx = XMALLOC(MTYPE_AS_PATH, sizeof(struct rtr_bgpsec_nlri));
-			pfx->prefix_len = p->prefixlen;
-			afi = family2afi(p->family);
-			switch (afi) {
-			case AFI_IP:
-				pfx->prefix.ver = LRTR_IPV4;
-				pfx->prefix.u.addr4.addr = p->u.prefix4.s_addr;
-				break;
-			case AFI_IP6:
-				pfx->prefix.ver = LRTR_IPV6;
-                memcpy(&pfx->prefix.u.addr6.addr, &p->u.prefix6.s6_addr32,
-                        sizeof(uint32_t) * 4);
-				break;
-			default:
-				//TODO: catch error here. Should be caught before
-				// doing BGPsec stuff, though.
-				break;
-			}
+    uint8_t alg = attr->bgpsecpath->sigblock1->alg;
 
-			uint8_t alg = attr->bgpsecpath->sigblock1->alg;
+    bgpsec = rtr_mgr_bgpsec_new(alg,
+                    SAFI_UNICAST, // for now...
+                    afi,
+                    bgp->as,
+                    peer->as,
+                    *pfx);
 
-			bgpsec = rtr_mgr_bgpsec_new(alg,
-						    SAFI_UNICAST, // for now...
-						    afi,
-						    bgp->as,
-						    peer->as,
-						    *pfx);
+    /* Assemble all secure path segments, if there are any */
+    /* First secure path */
+    struct bgpsec_secpath *curr_sec =
+            attr->bgpsecpath->secpaths;
 
-			/* Assemble all secure path segments, if there are any */
-			/* First secure path */
-			struct bgpsec_secpath *curr_sec =
-					attr->bgpsecpath->secpaths;
+    while (curr_sec) {
+        struct rtr_secure_path_seg *seg =
+            rtr_mgr_bgpsec_new_secure_path_seg(curr_sec->pcount,
+                               curr_sec->flags,
+                               curr_sec->as);
+        rtr_mgr_bgpsec_append_sec_path_seg(bgpsec, seg);
+        curr_sec = curr_sec->next;
+    }
 
-			while (curr_sec) {
-				struct rtr_secure_path_seg *seg =
-					rtr_mgr_bgpsec_new_secure_path_seg(curr_sec->pcount,
-									   curr_sec->flags,
-									   curr_sec->as);
-				rtr_mgr_bgpsec_append_sec_path_seg(bgpsec, seg);
-				curr_sec = curr_sec->next;
-			}
+    /* Now prepend the own secure path segment. */
+    rtr_mgr_bgpsec_prepend_sec_path_seg(bgpsec, my_sps);
 
-			/* Now prepend the own secure path segment. */
-			rtr_mgr_bgpsec_prepend_sec_path_seg(bgpsec, my_sps);
+    //TODO: make sure that sigblock1 is not NULL.
+    struct bgpsec_sigseg *curr_sig =
+                attr->bgpsecpath->sigblock1->sigsegs;
 
-			//TODO: make sure that sigblock1 is not NULL.
-			struct bgpsec_sigseg *curr_sig =
-						attr->bgpsecpath->sigblock1->sigsegs;
+    while (curr_sig) {
+        struct rtr_signature_seg *sig =
+            rtr_mgr_bgpsec_new_signature_seg(curr_sig->ski,
+                             curr_sig->sig_len,
+                             curr_sig->signature);
+        rtr_mgr_bgpsec_append_sig_seg(bgpsec, sig);
+        curr_sec = curr_sec->next;
+    }
 
-			while (curr_sig) {
-				struct rtr_signature_seg *sig =
-					rtr_mgr_bgpsec_new_signature_seg(curr_sig->ski,
-									 curr_sig->sig_len,
-									 curr_sig->signature);
-				rtr_mgr_bgpsec_append_sig_seg(bgpsec, sig);
-				curr_sec = curr_sec->next;
-			}
+    int retval = rtr_mgr_bgpsec_generate_signature(bgpsec,
+                               bgp->priv_key,
+                               &new_ss);
+    if (retval != RTR_BGPSEC_SUCCESS) {
+        //TODO: error handling if sig gen failed.
+    }
 
-			int retval = rtr_mgr_bgpsec_generate_signature(bgpsec,
-								       bgp->priv_key,
-								       &new_ss);
-			if (retval != RTR_BGPSEC_SUCCESS) {
-				//TODO: error handling if sig gen failed.
-			}
+    /* Init the own_sigseg struct */
+    *own_sigseg = XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
+    memset(*own_sigseg, 0, sizeof(struct bgpsec_sigseg));
+    *own_sigseg.signature = XMALLOC(MTYPE_ATTR, new_ss->sig_len);
 
-			/* Copy the signature and its length to the input parameters. */
-			memcpy(*signature, new_ss->signature, new_ss->sig_len);
-			*sig_len = new_ss->sig_len;
-			rtr_mgr_bgpsec_nlri_free(pfx);
-		}
-	}
+    /* Copy the signature and its length to the input parameters. */
+    *own_sigseg.next = NULL;
+    memcpy(*own_sigseg->signature, new_ss->signature, new_ss->sig_len);
+    *own_sigseg->sig_len = new_ss->sig_len;
+    memcpy(*own_sigseg->ski, new_ss->ski, SKI_LENGTH);
+
+    rtr_mgr_bgpsec_nlri_free(pfx);
 	return 0;
 }
 
@@ -401,7 +397,7 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 	uint8_t alg = 0;
 	bgp_size_t remain_len = length;
 
-	sec_path_count = stream_getw(peer->curr) - 2;
+	sec_path_count = (stream_getw(peer->curr) / BGPSEC_SECURE_PATH_SEGMENT_SIZE) - 2;
 	remain_len -= 2;
 
 	bgpsecpath = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_aspath));
@@ -425,6 +421,8 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 		prev_path = curr_path;
 	}
 
+    bgpsecpath->path_count = sec_path_count;
+
 	/* Parse the first signature block from the stream and build the
 	 * signature paths segments */
 	sigblock1 = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_sigblock));
@@ -446,6 +444,8 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 
 		prev_sig_path = curr_sig_path;
 		sigblock_len -= 22 + curr_sig_path->sig_len;
+
+        sigblock1->sig_count++;
 	}
 	bgpsecpath->sigblock1 = sigblock1;
 	remain_len -= sigblock1->length;
@@ -472,6 +472,8 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 
 			prev_sig_path = curr_sig_path;
 			sigblock_len -= 22 + curr_sig_path->sig_len;
+
+            sigblock1->sig_count++;
 		}
 		bgpsecpath->sigblock2 = sigblock2;
 	}
@@ -482,29 +484,61 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 
 static int write_bgpsec_aspath_to_stream(struct stream *s,
                                          struct bgpsec_aspath *aspath,
-                                         int *length)
+                                         int *length,
+                                         struct bgpsec_secpath own_secpath,
+                                         struct bgpsec_sigseg *own_sigseg)
 {
-    struct bgpsec_sigblock *block = aspath->sigblock1;
-    struct bgpsec_sigseg *seg = block->sigsegs;
-    struct bgpsec_secpath *sec = aspath->secpaths;
+    struct bgpsec_sigblock *block = NULL;
+    struct bgpsec_secpath *sec = NULL;
+    struct bgpsec_sigseg *sig = NULL;
+    int origin = 0;
 
-    // TODO: calculate the total lengh of the bgpsec aspath.
+    //TODO: origin or not?
+    if (aspath->path_count == 0)
+        origin = 1;
 
-    stream_putw(s, block->length);
-    stream_putc(s, block->alg);
-    
-    while (seg) {
-        stream_put(s, seg->ski, SKI_LENGTH);
-        stream_putw(s, seg->sig_len);
-        stream_put(s, seg->signature, seg->sig_len);
+    /* Prepend own_secpath to the BGPsec path */
+    if (origin) {
+        block = aspath->sigblock1;
+    } else {
+        own_secpath.next = aspath->secpaths;
+        own_sigseg->next = block->sigsegs;
+    }
 
+    /* Prepend own_sigseg to the signature segments */
+    memcpy(aspath->secpaths, &own_secpath, sizeof(struct bgpsec_secpath));
+    memcpy(block->sigsegs, own_sigseg, sizeof(struct bgpsec_sigseg));
+    aspath->path_count++;
+    block->sig_count++;
+
+    /* Put in all secure path segments */
+    sec = aspath->secpaths;
+    while (sec) {
         stream_putc(s, sec->pcount);
         stream_putc(s, sec->flags);
-        stream_putl(s, sec->asn);
+        stream_putl(s, sec->as);
 
-        seg = seg->next;
         sec = sec->next;
     }
+
+    *length += aspath->path_count * BGPSEC_SECURE_PATH_SEGMENT_SIZE;
+
+    /* Put in block length and algorithm ID */
+    stream_putw(s, block->length);
+    stream_putc(s, block->alg);
+
+    /* Put in all signature segments */
+    sig = block->sigsegs;
+    while (sig) {
+        stream_put(s, sig->ski, SKI_LENGTH);
+        stream_putw(s, sig->sig_len);
+        stream_put(s, sig->signature, sig->sig_len);
+
+        sig = sig->next;
+    }
+
+    *length += block->length;
+    memcpy(aspath->sigblock1, block, sizeof(struct bgpsec_sigblock));
 
     return 0;
 }

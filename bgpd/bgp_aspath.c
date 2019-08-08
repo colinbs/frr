@@ -2274,3 +2274,40 @@ void bgp_remove_aspath_from_aggregate_hash(struct bgp_aggregate *aggregate,
 	}
 }
 
+struct bgpsec_aspath *bgpsec_aspath_new(void)
+{
+    struct bgpsec_aspath *aspath =
+        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_aspath));
+    aspath->secpaths =
+        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_secpath));
+    aspath->path_count = 0;
+    aspath->sigblock1 = bgpsec_sigblock_new();
+    aspath->sigblock2 = bgpsec_sigblock_new();
+
+    //TODO: init str and str_len.
+
+    return aspath;
+}
+
+struct bgpsec_sigblock *bgpsec_sigblock_new(void)
+{
+    struct bgpsec_sigblock *sigblock =
+        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigblock));
+    sigblock->sigsegs = 
+        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
+    sigblock->length = 0;
+    sigblock->alg = 0;
+    sigblock->sig_count = 0;
+
+    return sigblock;
+}
+
+struct bgpsec_sigseg *bgpsec_sigseg_new(void)
+{
+    struct bgpsec_sigseg *sigseg =
+        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
+    sigseg->next = NULL;
+    memset(sigseg->ski, 0, sizeof(struct bgpsec_sigseg));
+    sigseg->sig_len = 0;
+    return sigseg;
+}
