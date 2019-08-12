@@ -67,9 +67,22 @@
 #include "bgpd/bgp_bgpsec_clippy.c"
 #endif
 
+#define BGPSEC_DEBUG(...)                                                \
+	if (bgpsec_debug) {                                                  \
+		zlog_debug("BGPSEC: " __VA_ARGS__);                              \
+	}
+
+#define BGPSEC_OUTPUT_STRING "Control BGPsec specific settings\n"
+
 #define BGPSEC_SECURE_PATH_SEGMENT_SIZE 6
 
 DEFINE_MTYPE_STATIC(BGPD, BGP_BGPSEC_VALIDATION, "BGP BGPsec AS path validation")
+
+enum return_values { SUCCESS = 0, ERROR = -1 };
+
+static int config_write(struct vty *vty);
+
+static void install_cli_commands(void);
 
 static int capability_bgpsec(struct peer *peer,
 			     struct capability_header *hdr);
@@ -87,11 +100,15 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
                                          struct bgpsec_aspath *aspath,
                                          int *bgpsec_attrlen,
                                          struct bgpsec_secpath own_secpath,
-                                         struct bgpsec_sigseg *own_sigseg)
+                                         struct bgpsec_sigseg *own_sigseg);
 
 struct bgpsec_aspath *bgpsc_aspath_new(void);
 
 struct bgpsec_sigblock *bgpsec_sigblock_new(void);
+
+static int bgpsec_debug;
+
+static struct cmd_node bgpsec_node = {BGPSEC_NODE, "%s(config-bgpsec)# ", 1};
 
 static void *malloc_wrapper(size_t size)
 {
@@ -144,7 +161,7 @@ static int capability_bgpsec(struct peer *peer,
 		/*}*/
 
 		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug("%s BGPSEC: Receive Capability received for AFI %d",
+			BGPSEC_DEBUG("%s BGPSEC: Receive Capability received for AFI %d",
 				   peer->host, afi);
 		}
 	}
@@ -168,7 +185,7 @@ static int capability_bgpsec(struct peer *peer,
 		/*}*/
 
 		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug("%s BGPSEC: Send Capability received for AFI %u",
+			BGPSEC_DEBUG("%s BGPSEC: Send Capability received for AFI %u",
 				   peer->host, afi);
 		}
 	}
@@ -194,7 +211,7 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
 		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
+			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Send Capability for AFI IPv4",
 				peer->host);
 		}
@@ -213,7 +230,7 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
 		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
+			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Receive Capability for AFI IPv4",
 				peer->host);
 		}
@@ -232,7 +249,7 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
 		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
+			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Send Capability for AFI IPv6",
 				peer->host);
 		}
@@ -250,7 +267,7 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
 		if (bgp_debug_neighbor_events(peer)) {
-			zlog_debug(
+			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Receive Capability for AFI IPv6",
 				peer->host);
 		}
@@ -267,6 +284,7 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
 	struct rtr_bgpsec_nlri *pfx = NULL;
 
 	struct rtr_signature_seg *ss = NULL;
+	struct rtr_secure_path_seg *sps = NULL;
 	struct rtr_secure_path_seg *my_sps = NULL;
 	struct rtr_signature_seg *new_ss = NULL;
 
@@ -334,11 +352,10 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
             attr->bgpsecpath->secpaths;
 
     while (curr_sec) {
-        struct rtr_secure_path_seg *seg =
-            rtr_mgr_bgpsec_new_secure_path_seg(curr_sec->pcount,
-                               curr_sec->flags,
-                               curr_sec->as);
-        rtr_mgr_bgpsec_append_sec_path_seg(bgpsec, seg);
+        sps = rtr_mgr_bgpsec_new_secure_path_seg(curr_sec->pcount,
+                                                 curr_sec->flags,
+                                                 curr_sec->as);
+        rtr_mgr_bgpsec_append_sec_path_seg(bgpsec, sps);
         curr_sec = curr_sec->next;
     }
 
@@ -350,17 +367,16 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
                 attr->bgpsecpath->sigblock1->sigsegs;
 
     while (curr_sig) {
-        struct rtr_signature_seg *sig =
-            rtr_mgr_bgpsec_new_signature_seg(curr_sig->ski,
-                             curr_sig->sig_len,
-                             curr_sig->signature);
-        rtr_mgr_bgpsec_append_sig_seg(bgpsec, sig);
+        ss = rtr_mgr_bgpsec_new_signature_seg(curr_sig->ski,
+                                              curr_sig->sig_len,
+                                              curr_sig->signature);
+        rtr_mgr_bgpsec_append_sig_seg(bgpsec, ss);
         curr_sec = curr_sec->next;
     }
 
-    int retval = rtr_mgr_bgpsec_generate_signature(bgpsec,
-                               bgp->priv_key,
-                               &new_ss);
+    retval = rtr_mgr_bgpsec_generate_signature(bgpsec,
+                                               bgp->priv_key,
+                                               &new_ss);
     if (retval != RTR_BGPSEC_SUCCESS) {
         //TODO: error handling if sig gen failed.
     }
@@ -368,13 +384,13 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
     /* Init the own_sigseg struct */
     *own_sigseg = XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
     memset(*own_sigseg, 0, sizeof(struct bgpsec_sigseg));
-    *own_sigseg.signature = XMALLOC(MTYPE_ATTR, new_ss->sig_len);
+    (*own_sigseg)->signature = XMALLOC(MTYPE_ATTR, new_ss->sig_len);
 
     /* Copy the signature and its length to the input parameters. */
-    *own_sigseg.next = NULL;
-    memcpy(*own_sigseg->signature, new_ss->signature, new_ss->sig_len);
-    *own_sigseg->sig_len = new_ss->sig_len;
-    memcpy(*own_sigseg->ski, new_ss->ski, SKI_LENGTH);
+    (*own_sigseg)->next = NULL;
+    memcpy((*own_sigseg)->signature, new_ss->signature, new_ss->sig_len);
+    (*own_sigseg)->sig_len = new_ss->sig_len;
+    memcpy((*own_sigseg)->ski, new_ss->ski, SKI_LENGTH);
 
     rtr_mgr_bgpsec_nlri_free(pfx);
 	return 0;
@@ -545,7 +561,7 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
 
 static int bgp_bgpsec_init(struct thread_master *master)
 {
-	/*rpki_debug = 0;*/
+    bgpsec_debug = 0;
 	/*rtr_is_running = 0;*/
 	/*rtr_is_stopping = 0;*/
 
@@ -558,7 +574,7 @@ static int bgp_bgpsec_init(struct thread_master *master)
 	/*timeout = TIMEOUT_DEFAULT;*/
 	/*initial_synchronisation_timeout =*/
 		/*INITIAL_SYNCHRONISATION_TIMEOUT_DEFAULT;*/
-	/*install_cli_commands();*/
+    install_cli_commands();
 	/*rpki_init_sync_socket();*/
 	return 0;
 }
@@ -590,6 +606,131 @@ static int bgp_bgpsec_module_init(void)
                   write_bgpsec_aspath_to_stream);
 
 	return 0;
+}
+
+DEFUN_NOSH (bgpsec,
+	    bgpsec_cmd,
+	    "bgpsec",
+	    "Enable BGPsec and enter BGPsec configuration mode\n")
+{
+	vty->node = BGPSEC_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUN (debug_bgpsec,
+       debug_bgpsec_cmd,
+       "debug bgpsec",
+       DEBUG_STR
+       "Enable debugging for BGPsec\n")
+{
+	bgpsec_debug = 1;
+    BGPSEC_DEBUG("BGPsec debugging successfully enabled.");
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_debug_bgpsec,
+       no_debug_bgpsec_cmd,
+       "no debug bgpsec",
+       NO_STR
+       DEBUG_STR
+       "Disable debugging for BGPsec\n")
+{
+	bgpsec_debug = 0;
+    BGPSEC_DEBUG("BGPsec debugging successfully disabled.");
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_bgpsec_start,
+       bgp_bgpsec_start_cmd,
+       "bgpsec start",
+       BGPSEC_OUTPUT_STRING
+       "start bgpsec support\n")
+{
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_bgpsec_stop,
+       bgp_bgpsec_stop_cmd,
+       "bgpsec stop",
+       BGPSEC_OUTPUT_STRING
+       "start bgpsec support\n")
+{
+	return CMD_SUCCESS;
+}
+
+DEFUN_NOSH (bgpsec_exit,
+	    bgpsec_exit_cmd,
+	    "exit",
+	    "Exit BGPsec configuration and restart BGPsec session\n")
+{
+	/*reset(false);*/
+
+	vty->node = CONFIG_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUN_NOSH (bgpsec_quit,
+	    bgpsec_quit_cmd,
+	    "quit",
+	    "Exit BGPsec configuration mode\n")
+{
+	return bgpsec_exit(self, vty, argc, argv);
+}
+
+DEFUN_NOSH (bgpsec_end,
+	    bgpsec_end_cmd,
+	    "end",
+	    "End BGPsec configuration, restart BGPsec session and change to enable mode.\n")
+{
+    int ret = SUCCESS;
+
+	vty_config_exit(vty);
+	vty->node = ENABLE_NODE;
+	return ret == SUCCESS ? CMD_SUCCESS : CMD_WARNING;
+}
+
+
+static int config_write(struct vty *vty)
+{
+    return 1;
+}
+
+static void overwrite_exit_commands(void)
+{
+	unsigned int i;
+	vector cmd_vector = bgpsec_node.cmd_vector;
+
+	for (i = 0; i < cmd_vector->active; ++i) {
+		struct cmd_element *cmd = vector_lookup(cmd_vector, i);
+
+		if (strcmp(cmd->string, "exit") == 0
+		    || strcmp(cmd->string, "quit") == 0
+		    || strcmp(cmd->string, "end") == 0) {
+			uninstall_element(BGPSEC_NODE, cmd);
+		}
+	}
+
+	install_element(BGPSEC_NODE, &bgpsec_exit_cmd);
+	install_element(BGPSEC_NODE, &bgpsec_quit_cmd);
+	install_element(BGPSEC_NODE, &bgpsec_end_cmd);
+}
+
+static void install_cli_commands(void)
+{
+	install_node(&bgpsec_node, &config_write);
+	install_default(BGPSEC_NODE);
+	overwrite_exit_commands();
+	install_element(CONFIG_NODE, &bgpsec_cmd);
+	install_element(ENABLE_NODE, &bgpsec_cmd);
+
+	install_element(ENABLE_NODE, &bgp_bgpsec_start_cmd);
+	install_element(ENABLE_NODE, &bgp_bgpsec_stop_cmd);
+
+	/* Install debug commands */
+	install_element(CONFIG_NODE, &debug_bgpsec_cmd);
+	install_element(ENABLE_NODE, &debug_bgpsec_cmd);
+	install_element(CONFIG_NODE, &no_debug_bgpsec_cmd);
+	install_element(ENABLE_NODE, &no_debug_bgpsec_cmd);
 }
 
 FRR_MODULE_SETUP(.name = "bgpd_bgpsec", .version = "0.0.1",

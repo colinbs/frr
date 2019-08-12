@@ -1478,6 +1478,8 @@ static struct cmd_node rpki_node = {
 	.prompt = "%s(config-rpki)# ",
 };
 
+static struct cmd_node bgpsec_node = {BGPSEC_NODE, "%s(config-bgpsec)# ", 1};
+
 #if HAVE_BFDD > 0
 static struct cmd_node bfd_node = {
 	.name = "bfd",
@@ -1660,6 +1662,16 @@ DEFUNSH(VTYSH_BGPD,
 {
 	vty->node = RPKI_NODE;
 	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD,
+	bgpsec,
+	bgpsec_cmd,
+	"bgpsec",
+	"Enable BGPsec and enter BGPsec configuration mode\n")
+{
+	vty->node = BGPSEC_NODE;
+    return CMD_SUCCESS;
 }
 
 DEFUNSH(VTYSH_BGPD,
@@ -2064,6 +2076,18 @@ DEFUNSH(VTYSH_BGPD, rpki_quit, rpki_quit_cmd, "quit",
 	return rpki_exit(self, vty, argc, argv);
 }
 
+DEFUNSH(VTYSH_BGPD, bgpsec_exit, bgpsec_exit_cmd, "exit",
+	"Exit current mode and down to previous mode\n")
+	vtysh_exit(vty);
+	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD, bgpsec_quit, bgpsec_quit_cmd, "quit",
+	"Exit current mode and down to previous mode\n")
+{
+	return bgpsec_exit(self, vty, argc, argv);
+}
+
 DEFUNSH(VTYSH_BGPD, bmp_exit, bmp_exit_cmd, "exit",
 	"Exit current mode and down to previous mode\n")
 {
@@ -2078,6 +2102,14 @@ DEFUNSH(VTYSH_BGPD, bmp_quit, bmp_quit_cmd, "quit",
 }
 
 DEFUNSH(VTYSH_VRF, exit_vrf_config, exit_vrf_config_cmd, "exit-vrf",
+	"Exit current mode and down to previous mode\n")
+{
+    if (vty->node == VRF_NODE)
+		vty->node = CONFIG_NODE;
+    return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_PIMD|VTYSH_ZEBRA, exit_vrf_config, exit_vrf_config_cmd, "exit-vrf",
 	"Exit from VRF configuration mode\n")
 {
 	if (vty->node == VRF_NODE)
@@ -4035,6 +4067,11 @@ void vtysh_init_vty(void)
 	install_element(RPKI_NODE, &rpki_exit_cmd);
 	install_element(RPKI_NODE, &rpki_quit_cmd);
 	install_element(RPKI_NODE, &vtysh_end_all_cmd);
+
+	install_element(CONFIG_NODE, &bgpsec_cmd);
+	install_element(BGPSEC_NODE, &bgpsec_exit_cmd);
+	install_element(BGPSEC_NODE, &bgpsec_quit_cmd);
+	install_element(BGPSEC_NODE, &vtysh_end_all_cmd);
 
 	/* EVPN commands */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cmd);

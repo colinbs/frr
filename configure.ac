@@ -622,6 +622,8 @@ AC_ARG_ENABLE([oldvpn_commands],
   AS_HELP_STRING([--enable-oldvpn-commands], [Keep old vpn commands]))
 AC_ARG_ENABLE([rpki],
   AS_HELP_STRING([--enable-rpki], [enable RPKI prefix validation support]))
+AC_ARG_ENABLE([bgpsec],
+  AS_HELP_STRING([--enable-bgpsec], [enable BGPsec AS path validation support]))
 AC_ARG_ENABLE([clippy-only],
   AS_HELP_STRING([--enable-clippy-only], [Only build clippy]))
 AC_ARG_ENABLE([numeric_version],
@@ -1863,6 +1865,16 @@ case "$host_os" in
     enable_vrrpd="no"
     ;;
 esac
+
+dnl ------------------------------------
+dnl Enable BGPsec and add librtr to libs
+dnl ------------------------------------
+if test "${enable_bgpsec}" = "yes"; then
+  PKG_CHECK_MODULES([BGPSEC], [rtrlib >= 0.5.0],
+      [BGPSEC=true],
+      [BGPSEC=false
+      AC_MSG_ERROR([rtrlib was not found on your system or is too old.])]
+  )
 fi
 
 dnl ------------------------------------------
@@ -2377,6 +2389,7 @@ AM_CONDITIONAL([GRPC], [test "$enable_grpc" = "yes"])
 AM_CONDITIONAL([ZEROMQ], [test "$ZEROMQ" = "true"])
 dnl plugins
 AM_CONDITIONAL([RPKI], [test "$RPKI" = "true"])
+AM_CONDITIONAL([BGPSEC], [test "$BGPSEC" = "true"])
 AM_CONDITIONAL([SNMP], [test "$SNMP_METHOD" = "agentx"])
 AM_CONDITIONAL([IRDP], [$IRDP])
 AM_CONDITIONAL([FPM], [test "$enable_fpm" = "yes"])
