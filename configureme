@@ -1,0 +1,12 @@
+#!/bin/bash
+
+./configure --enable-rpki \
+            --enable-bgpsec \
+            --prefix=/usr \
+            --sbindir=/usr/lib/frr \
+            --sysconfdir=/etc/frr \
+            --libdir=/usr/lib \
+            --localstatedir=/var/run/frr
+            #--enable-vty-group=frrvty \
+            #--enable-user=frr \
+            #--enable-group=frr \
