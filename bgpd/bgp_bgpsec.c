@@ -135,6 +135,8 @@ static int capability_bgpsec(struct peer *peer,
 	version_dir = stream_getc(s);
 	afi = stream_getw(s);
 
+    BGPSEC_DEBUG("BGPsec capability received");
+
 	if (hdr->length != CAPABILITY_CODE_BGPSEC_LEN) {
 		flog_err(EC_BGP_CAPABILITY_INVALID_LENGTH,
 			 "BGPSEC: received invalid capability header length %d",
@@ -609,12 +611,41 @@ static int bgp_bgpsec_module_init(void)
 }
 
 DEFUN_NOSH (bgpsec,
-	    bgpsec_cmd,
-	    "bgpsec",
-	    "Enable BGPsec and enter BGPsec configuration mode\n")
+            bgpsec_cmd,
+            "bgpsec",
+            "Enable BGPsec and enter BGPsec configuration mode\n")
 {
 	vty->node = BGPSEC_NODE;
 	return CMD_SUCCESS;
+}
+
+DEFUN (bgpsec_cap,
+       bgpsec_cap_cmd,
+       "bgpsec cap <send|receive> <ipv4|ipv6>",
+       BGPSEC_OUTPUT_STRING
+       "Set send and receive capabilities\n"
+       "Send BGPsec updates for given AFI\n"
+       "Receive BGPsec updates for given AFI\n"
+       "IPv4 prefixes\n"
+       "IPv6 prefixes\n")
+{
+    BGPSEC_DEBUG("BGPsec capabilities set: %s %s", argv[2]->arg, argv[3]->arg);
+    return CMD_SUCCESS;
+}
+
+DEFUN (no_bgpsec_cap,
+       no_bgpsec_cap_cmd,
+       "no bgpsec cap <send|receive> <ipv4|ipv6>",
+       NO_STR
+       BGPSEC_OUTPUT_STRING
+       "Unset send and receive capabilities\n"
+       "Dont Send BGPsec updates for given AFI\n"
+       "Dont Receive BGPsec updates for given AFI\n"
+       "No IPv4 prefixes\n"
+       "No IPv6 prefixes\n")
+{
+    BGPSEC_DEBUG("BGPsec capabilities unset: dont %s %s", argv[3]->arg, argv[4]->arg);
+    return CMD_SUCCESS;
 }
 
 DEFUN (debug_bgpsec,
@@ -624,7 +655,7 @@ DEFUN (debug_bgpsec,
        "Enable debugging for BGPsec\n")
 {
 	bgpsec_debug = 1;
-    BGPSEC_DEBUG("BGPsec debugging successfully enabled.");
+    BGPSEC_DEBUG("BGPsec debugging successfully enabled");
 	return CMD_SUCCESS;
 }
 
@@ -636,32 +667,49 @@ DEFUN (no_debug_bgpsec,
        "Disable debugging for BGPsec\n")
 {
 	bgpsec_debug = 0;
-    BGPSEC_DEBUG("BGPsec debugging successfully disabled.");
+    BGPSEC_DEBUG("BGPsec debugging successfully disabled");
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_bgpsec_start,
-       bgp_bgpsec_start_cmd,
+DEFUN (bgpsec_start,
+       bgpsec_start_cmd,
        "bgpsec start",
        BGPSEC_OUTPUT_STRING
        "start bgpsec support\n")
 {
+    BGPSEC_DEBUG("BGPsec started");
+    struct bgp *bgp;
+    bgp = bgp_get_default();
+    if (bgp)
+        BGPSEC_DEBUG("AS: %d", bgp->as);
+    BGPSEC_DEBUG("No BGP set");
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_bgpsec_stop,
-       bgp_bgpsec_stop_cmd,
+DEFUN (bgpsec_spass,
+       bgpsec_spass_cmd,
+       "bgpsec spass",
+       BGPSEC_OUTPUT_STRING
+       "bgpsec macht spass\n")
+{
+    BGPSEC_DEBUG("SO VIEL SPASS!!!");
+    return CMD_SUCCESS;
+}
+
+DEFUN (bgpsec_stop,
+       bgpsec_stop_cmd,
        "bgpsec stop",
        BGPSEC_OUTPUT_STRING
-       "start bgpsec support\n")
+       "stop bgpsec support\n")
 {
+    BGPSEC_DEBUG("BGPsec stopped");
 	return CMD_SUCCESS;
 }
 
 DEFUN_NOSH (bgpsec_exit,
-	    bgpsec_exit_cmd,
-	    "exit",
-	    "Exit BGPsec configuration and restart BGPsec session\n")
+            bgpsec_exit_cmd,
+            "exit",
+            "Exit BGPsec configuration and restart BGPsec session\n")
 {
 	/*reset(false);*/
 
@@ -670,17 +718,17 @@ DEFUN_NOSH (bgpsec_exit,
 }
 
 DEFUN_NOSH (bgpsec_quit,
-	    bgpsec_quit_cmd,
-	    "quit",
-	    "Exit BGPsec configuration mode\n")
+            bgpsec_quit_cmd,
+            "quit",
+            "Exit BGPsec configuration mode\n")
 {
 	return bgpsec_exit(self, vty, argc, argv);
 }
 
 DEFUN_NOSH (bgpsec_end,
-	    bgpsec_end_cmd,
-	    "end",
-	    "End BGPsec configuration, restart BGPsec session and change to enable mode.\n")
+            bgpsec_end_cmd,
+            "end",
+            "End BGPsec configuration, restart BGPsec session and change to enable mode\n")
 {
     int ret = SUCCESS;
 
@@ -723,14 +771,26 @@ static void install_cli_commands(void)
 	install_element(CONFIG_NODE, &bgpsec_cmd);
 	install_element(ENABLE_NODE, &bgpsec_cmd);
 
-	install_element(ENABLE_NODE, &bgp_bgpsec_start_cmd);
-	install_element(ENABLE_NODE, &bgp_bgpsec_stop_cmd);
+	install_element(ENABLE_NODE, &bgpsec_start_cmd);
+	install_element(ENABLE_NODE, &bgpsec_stop_cmd);
 
 	/* Install debug commands */
 	install_element(CONFIG_NODE, &debug_bgpsec_cmd);
 	install_element(ENABLE_NODE, &debug_bgpsec_cmd);
 	install_element(CONFIG_NODE, &no_debug_bgpsec_cmd);
 	install_element(ENABLE_NODE, &no_debug_bgpsec_cmd);
+
+    /* Install capability commands */
+    install_element(CONFIG_NODE, &bgpsec_cap_cmd);
+    install_element(ENABLE_NODE, &bgpsec_cap_cmd);
+    install_element(CONFIG_NODE, &no_bgpsec_cap_cmd);
+    install_element(ENABLE_NODE, &no_bgpsec_cap_cmd);
+
+    /* Try to append something to the AFI nodes */
+    install_element(BGP_IPV4_NODE, &bgpsec_spass_cmd);
+    install_element(BGP_IPV4M_NODE, &bgpsec_spass_cmd);
+    install_element(BGP_IPV6_NODE, &bgpsec_spass_cmd);
+    install_element(BGP_IPV6M_NODE, &bgpsec_spass_cmd);
 }
 
 FRR_MODULE_SETUP(.name = "bgpd_bgpsec", .version = "0.0.1",

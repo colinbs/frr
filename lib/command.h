@@ -404,6 +404,7 @@ struct cmd_node {
 #define WATCHFRR_STR "watchfrr information\n"
 #define ZEBRA_STR "Zebra information\n"
 #define FILTER_LOG_STR "Filter Logs\n"
+#define BGPSEC_STR "BGPsec information\n"
 
 #define CMD_VNI_RANGE "(1-16777215)"
 #define CONF_BACKUP_EXT ".sav"

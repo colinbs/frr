@@ -4382,6 +4382,37 @@ ALIAS(no_neighbor_shutdown_msg, no_neighbor_shutdown_cmd,
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Administratively shut down this neighbor\n")
 
+DEFUN (neighbor_capability_bgpsec,
+       neighbor_capability_bgpsec_cmd,
+       "neighbor <A.B.C.D|X:X::X:X|WORD> capability bgpsec <send|receive> <ipv4|ipv6>",
+       NEIGHBOR_STR
+       NEIGHBOR_ADDR_STR2
+       BGPSEC_STR
+       "Advertise capability to the peer\n"
+       "Advertise BGPsec send/receive capabilities to this neighbor\n")
+{
+    int idx_peer = 1;
+    int idx_cap = 4;
+    int idx_afi = 5;
+    int flag = 0;
+
+    //TODO: Error handling
+    if (strcmp(argv[idx_cap]->arg, "send") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "receive") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+    }
+
+	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
+				 flag);
+}
+
 /* neighbor capability dynamic. */
 DEFUN (neighbor_capability_dynamic,
        neighbor_capability_dynamic_cmd,
