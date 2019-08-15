@@ -135,7 +135,7 @@ static int capability_bgpsec(struct peer *peer,
 	version_dir = stream_getc(s);
 	afi = stream_getw(s);
 
-    BGPSEC_DEBUG("BGPsec capability received. DIR: %d, AFI: %d");
+    BGPSEC_DEBUG("BGPsec capability received. DIR: %d, AFI: %d", version_dir, afi);
 
 	if (hdr->length != CAPABILITY_CODE_BGPSEC_LEN) {
 		flog_err(EC_BGP_CAPABILITY_INVALID_LENGTH,
