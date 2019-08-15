@@ -135,7 +135,7 @@ static int capability_bgpsec(struct peer *peer,
 	version_dir = stream_getc(s);
 	afi = stream_getw(s);
 
-    BGPSEC_DEBUG("BGPsec capability received");
+    BGPSEC_DEBUG("BGPsec capability received. DIR: %d, AFI: %d");
 
 	if (hdr->length != CAPABILITY_CODE_BGPSEC_LEN) {
 		flog_err(EC_BGP_CAPABILITY_INVALID_LENGTH,
@@ -156,10 +156,10 @@ static int capability_bgpsec(struct peer *peer,
 			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);*/
 		/*} else {*/
 			//TODO: gives strange error code output in test.
-			flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
-				 "BGPSEC: received invalid AFI %d in capability",
-				 afi);
-			return 1;
+			/*flog_err(EC_BGP_CAPABILITY_INVALID_DATA,*/
+				 /*"BGPSEC: received invalid AFI %d in capability",*/
+				 /*afi);*/
+			/*return 1;*/
 		/*}*/
 
 		if (bgp_debug_neighbor_events(peer)) {
@@ -180,10 +180,10 @@ static int capability_bgpsec(struct peer *peer,
 			/*SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);*/
 		/*} else {*/
 			//TODO: gives strange error code output in test.
-			flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
-				 "BGPSEC: received invalid AFI %d in capability",
-				 afi);
-			return 1;
+			/*flog_err(EC_BGP_CAPABILITY_INVALID_DATA,*/
+				 /*"BGPSEC: received invalid AFI %d in capability",*/
+				 /*afi);*/
+			/*return 1;*/
 		/*}*/
 
 		if (bgp_debug_neighbor_events(peer)) {
