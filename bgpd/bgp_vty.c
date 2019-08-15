@@ -4399,7 +4399,7 @@ DEFUN (neighbor_capability_bgpsec,
     int idx_peer = 1;
     int idx_cap = 4;
     int idx_afi = 5;
-    int flag = 0;
+    uint32_t flag = 0;
 
     //TODO: Error handling
     if (strcmp(argv[idx_cap]->arg, "send") == 0) {
@@ -4408,18 +4408,19 @@ DEFUN (neighbor_capability_bgpsec,
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_SEND_IPV6;
     } else if (strcmp(argv[idx_cap]->arg, "receive") == 0) {
-        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
     } else if (strcmp(argv[idx_cap]->arg, "both") == 0) {
-        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV4;
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6 | PEER_FLAG_BGPSEC_SEND_IPV6;
     }
 
     zlog_debug("BGPSEC: BGPsec capabilities set: %s %s", argv[4]->arg, argv[5]->arg);
+    zlog_debug("FLAG BEFORE: %d", flag);
 
 	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
 				 flag);
@@ -4443,7 +4444,7 @@ DEFUN (no_neighbor_capability_bgpsec,
     int idx_peer = 2;
     int idx_cap = 5;
     int idx_afi = 6;
-    int flag = 0;
+    uint32_t flag = 0;
 
     //TODO: Error handling
     if (strcmp(argv[idx_cap]->arg, "send") == 0) {
@@ -4452,12 +4453,12 @@ DEFUN (no_neighbor_capability_bgpsec,
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_SEND_IPV6;
     } else if (strcmp(argv[idx_cap]->arg, "receive") == 0) {
-        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
     } else if (strcmp(argv[idx_cap]->arg, "both") == 0) {
-        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV4;
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6 | PEER_FLAG_BGPSEC_SEND_IPV6;

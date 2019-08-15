@@ -3886,6 +3886,10 @@ static const struct peer_flag_action peer_flag_action_list[] = {
 	{PEER_FLAG_LOCAL_AS_NO_PREPEND, 0, peer_change_none},
 	{PEER_FLAG_LOCAL_AS_REPLACE_AS, 0, peer_change_none},
 	{PEER_FLAG_UPDATE_SOURCE, 0, peer_change_none},
+    {PEER_FLAG_BGPSEC_SEND_IPV4, 0, peer_change_reset},
+    {PEER_FLAG_BGPSEC_SEND_IPV6, 0, peer_change_reset},
+    {PEER_FLAG_BGPSEC_RECEIVE_IPV4, 0, peer_change_reset},
+    {PEER_FLAG_BGPSEC_RECEIVE_IPV6, 0, peer_change_reset},
 	{0, 0, 0}};
 
 static const struct peer_flag_action peer_af_flag_action_list[] = {
@@ -4039,6 +4043,8 @@ static int peer_flag_modify(struct peer *peer, uint32_t flag, int set)
 
 	memset(&action, 0, sizeof(struct peer_flag_action));
 	size = sizeof(peer_flag_action_list) / sizeof(struct peer_flag_action);
+
+    zlog_debug("FLAG: %d", flag);
 
 	invert = CHECK_FLAG(peer->flags_invert, flag);
 	found = peer_flag_action_set(peer_flag_action_list, size, &action,
