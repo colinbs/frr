@@ -212,6 +212,9 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		bgpsec_afi = BGPSEC_AFI_IPV4;
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
+        BGPSEC_DEBUG(
+            "%s BGPSEC: sending Send Capability for AFI IPv4",
+            peer->host);
 		if (bgp_debug_neighbor_events(peer)) {
 			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Send Capability for AFI IPv4",
@@ -231,6 +234,9 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		bgpsec_afi = BGPSEC_AFI_IPV4;
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
+        BGPSEC_DEBUG(
+            "%s BGPSEC: sending Receive Capability for AFI IPv4",
+            peer->host);
 		if (bgp_debug_neighbor_events(peer)) {
 			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Receive Capability for AFI IPv4",
@@ -250,6 +256,9 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		bgpsec_afi = BGPSEC_AFI_IPV6;
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
+        BGPSEC_DEBUG(
+            "%s BGPSEC: sending Send Capability for AFI IPv6",
+            peer->host);
 		if (bgp_debug_neighbor_events(peer)) {
 			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Send Capability for AFI IPv6",
@@ -268,6 +277,9 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		bgpsec_afi = BGPSEC_AFI_IPV6;
 		stream_putc(s, bgpsec_version_dir);
 		stream_putw(s, bgpsec_afi);
+        BGPSEC_DEBUG(
+            "%s BGPSEC: sending Receive Capability for AFI IPv6",
+            peer->host);
 		if (bgp_debug_neighbor_events(peer)) {
 			BGPSEC_DEBUG(
 				"%s BGPSEC: sending Receive Capability for AFI IPv6",
