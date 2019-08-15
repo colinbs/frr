@@ -4420,7 +4420,6 @@ DEFUN (neighbor_capability_bgpsec,
     }
 
     zlog_debug("BGPSEC: BGPsec capabilities set: %s %s", argv[4]->arg, argv[5]->arg);
-    zlog_debug("FLAG BEFORE: %d", flag);
 
 	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
 				 flag);

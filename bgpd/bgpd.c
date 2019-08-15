@@ -4044,8 +4044,6 @@ static int peer_flag_modify(struct peer *peer, uint32_t flag, int set)
 	memset(&action, 0, sizeof(struct peer_flag_action));
 	size = sizeof(peer_flag_action_list) / sizeof(struct peer_flag_action);
 
-    zlog_debug("FLAG: %d", flag);
-
 	invert = CHECK_FLAG(peer->flags_invert, flag);
 	found = peer_flag_action_set(peer_flag_action_list, size, &action,
 				     flag);
