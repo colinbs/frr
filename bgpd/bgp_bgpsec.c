@@ -619,35 +619,6 @@ DEFUN_NOSH (bgpsec,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgpsec_cap,
-       bgpsec_cap_cmd,
-       "bgpsec cap <send|receive> <ipv4|ipv6>",
-       BGPSEC_OUTPUT_STRING
-       "Set send and receive capabilities\n"
-       "Send BGPsec updates for given AFI\n"
-       "Receive BGPsec updates for given AFI\n"
-       "IPv4 prefixes\n"
-       "IPv6 prefixes\n")
-{
-    BGPSEC_DEBUG("BGPsec capabilities set: %s %s", argv[2]->arg, argv[3]->arg);
-    return CMD_SUCCESS;
-}
-
-DEFUN (no_bgpsec_cap,
-       no_bgpsec_cap_cmd,
-       "no bgpsec cap <send|receive> <ipv4|ipv6>",
-       NO_STR
-       BGPSEC_OUTPUT_STRING
-       "Unset send and receive capabilities\n"
-       "Dont Send BGPsec updates for given AFI\n"
-       "Dont Receive BGPsec updates for given AFI\n"
-       "No IPv4 prefixes\n"
-       "No IPv6 prefixes\n")
-{
-    BGPSEC_DEBUG("BGPsec capabilities unset: dont %s %s", argv[3]->arg, argv[4]->arg);
-    return CMD_SUCCESS;
-}
-
 DEFUN (debug_bgpsec,
        debug_bgpsec_cmd,
        "debug bgpsec",
@@ -779,12 +750,6 @@ static void install_cli_commands(void)
 	install_element(ENABLE_NODE, &debug_bgpsec_cmd);
 	install_element(CONFIG_NODE, &no_debug_bgpsec_cmd);
 	install_element(ENABLE_NODE, &no_debug_bgpsec_cmd);
-
-    /* Install capability commands */
-    install_element(CONFIG_NODE, &bgpsec_cap_cmd);
-    install_element(ENABLE_NODE, &bgpsec_cap_cmd);
-    install_element(CONFIG_NODE, &no_bgpsec_cap_cmd);
-    install_element(ENABLE_NODE, &no_bgpsec_cap_cmd);
 
     /* Try to append something to the AFI nodes */
     install_element(BGP_IPV4_NODE, &bgpsec_spass_cmd);

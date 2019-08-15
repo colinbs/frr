@@ -4382,14 +4382,19 @@ ALIAS(no_neighbor_shutdown_msg, no_neighbor_shutdown_cmd,
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Administratively shut down this neighbor\n")
 
+/* neighbor capability bgpsec */
 DEFUN (neighbor_capability_bgpsec,
        neighbor_capability_bgpsec_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> capability bgpsec <send|receive> <ipv4|ipv6>",
+       "neighbor <A.B.C.D|X:X::X:X|WORD> capability bgpsec <both|send|receive> <ipv4|ipv6>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
-       BGPSEC_STR
        "Advertise capability to the peer\n"
-       "Advertise BGPsec send/receive capabilities to this neighbor\n")
+       "Advertise BGPsec send/receive capabilities to this neighbor\n"
+       "Send and receive BGPsec updates for given AFIs\n"
+       "Send BGPsec updates for given AFI\n"
+       "Receive BGPsec updates for given AFI\n"
+       "IPv4 prefixes\n"
+       "IPv6 prefixes\n")
 {
     int idx_peer = 1;
     int idx_cap = 4;
@@ -4407,9 +4412,60 @@ DEFUN (neighbor_capability_bgpsec,
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
         else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
             flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "both") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6 | PEER_FLAG_BGPSEC_SEND_IPV6;
     }
 
+    zlog_debug("BGPSEC: BGPsec capabilities set: %s %s", argv[4]->arg, argv[5]->arg);
+
 	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
+				 flag);
+}
+
+/* neighbor capability bgpsec */
+DEFUN (no_neighbor_capability_bgpsec,
+       no_neighbor_capability_bgpsec_cmd,
+       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability bgpsec <both|send|receive> <ipv4|ipv6>",
+       NO_STR
+       NEIGHBOR_STR
+       NEIGHBOR_ADDR_STR2
+       "Do not advertise capability to the peer\n"
+       "Do not advertise BGPsec send/receive capabilities to this neighbor\n"
+       "Do not send and receive BGPsec updates for given AFIs\n"
+       "Do not send BGPsec updates for given AFI\n"
+       "Do not receive BGPsec updates for given AFI\n"
+       "No IPv4 prefixes\n"
+       "No IPv6 prefixes\n")
+{
+    int idx_peer = 2;
+    int idx_cap = 5;
+    int idx_afi = 6;
+    int flag = 0;
+
+    //TODO: Error handling
+    if (strcmp(argv[idx_cap]->arg, "send") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "receive") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "both") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6 | PEER_FLAG_BGPSEC_SEND_IPV6;
+    }
+
+    zlog_debug("BGPSEC: BGPsec capabilities unset: dont %s %s", argv[5]->arg, argv[6]->arg);
+
+	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
 				 flag);
 }
 
@@ -16315,6 +16371,9 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_passive_cmd);
 	install_element(BGP_NODE, &no_neighbor_passive_cmd);
 
+    /* "neighbor capability bgpsec send/receive" commands */
+    install_element(BGP_NODE, &neighbor_capability_bgpsec_cmd);
+    install_element(BGP_NODE, &no_neighbor_capability_bgpsec_cmd);
 
 	/* "neighbor shutdown" commands. */
 	install_element(BGP_NODE, &neighbor_shutdown_cmd);
