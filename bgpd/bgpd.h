@@ -230,6 +230,29 @@ struct vpn_policy {
 };
 
 /*
+ * A key struct that holds the private key for BGPsec signature.
+ */
+struct private_key {
+    /* The location of the private key on the file system. */
+    const char *filepath;
+
+    /* The byte representation of the private key. */
+    uint8_t *key_buffer;
+
+    /* The length of the private key. */
+    uint16_t key_len;
+
+	/* Subject Key Identifier of the private BGPsec key */
+	uint8_t ski[SKI_SIZE];
+
+    /* A bool that tells if the key was successfully loaded. */
+    bool loaded;
+
+    /* A bool that tells if the key is used for signing. */
+    bool active;
+};
+
+/*
  * Type of 'struct bgp'.
  * - Default: The default instance
  * - VRF: A specific (non-default) VRF
@@ -678,7 +701,7 @@ struct bgp {
 	uint8_t ski[SKI_SIZE];
 
 	/* Private BGPsec key */
-	uint8_t *priv_key;
+	struct private_key *priv_key;
 
 	QOBJ_FIELDS
 };

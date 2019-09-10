@@ -2278,13 +2278,18 @@ struct bgpsec_aspath *bgpsec_aspath_new(void)
 {
     struct bgpsec_aspath *aspath =
         XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_aspath));
-    aspath->secpaths =
-        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_secpath));
+
+    aspath->refcnt = 0;
+    //TODO: only allocate memory if you need it.
+    aspath->secpaths = NULL;
+        /*XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_secpath));*/
     aspath->path_count = 0;
-    aspath->sigblock1 = bgpsec_sigblock_new();
-    aspath->sigblock2 = bgpsec_sigblock_new();
+    aspath->sigblock1 = NULL;
+    aspath->sigblock2 = NULL;
 
     //TODO: init str and str_len.
+    aspath->str = NULL;
+    aspath->str_len = 0;
 
     return aspath;
 }
@@ -2293,10 +2298,10 @@ struct bgpsec_sigblock *bgpsec_sigblock_new(void)
 {
     struct bgpsec_sigblock *sigblock =
         XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigblock));
-    sigblock->sigsegs = 
-        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
+    sigblock->sigsegs = NULL;
+        /*XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));*/
     sigblock->length = 0;
-    sigblock->alg = 0;
+    sigblock->alg = 1;
     sigblock->sig_count = 0;
 
     return sigblock;
@@ -2310,4 +2315,48 @@ struct bgpsec_sigseg *bgpsec_sigseg_new(void)
     memset(sigseg->ski, 0, sizeof(struct bgpsec_sigseg));
     sigseg->sig_len = 0;
     return sigseg;
+}
+
+struct bgpsec_secpath *bgpsec_secpath_new(void)
+{
+    struct bgpsec_secpath *secpath =
+        XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_secpath));
+    secpath->next = NULL;
+    secpath->flags = 0;
+    secpath->pcount = 0;
+    secpath->as = 0;
+    return secpath;
+}
+
+void bgpsec_secpath_free(struct bgpsec_secpath *secpath)
+{
+    XFREE(MTYPE_AS_PATH, secpath);
+}
+
+void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath)
+{
+    struct bgpsec_secpath *tmp = NULL;
+
+    while (secpath) {
+        tmp = secpath;
+        secpath = secpath->next;
+        bgpsec_secpath_free(tmp);
+    }
+}
+
+void bgpsec_sigseg_free(struct bgpsec_sigseg *sigseg)
+{
+    XFREE(MTYPE_AS_PATH, sigseg->signature);
+    XFREE(MTYPE_AS_PATH, sigseg);
+}
+
+void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg)
+{
+    struct bgpsec_sigseg *tmp = NULL;
+
+    while (sigseg) {
+        tmp = sigseg;
+        sigseg = sigseg->next;
+        bgpsec_sigseg_free(tmp);
+    }
 }

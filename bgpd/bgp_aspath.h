@@ -218,4 +218,14 @@ extern struct bgpsec_sigblock *bgpsec_sigblock_new(void);
 
 extern struct bgpsec_sigseg *bgpsec_sigseg_new(void);
 
+extern struct bgpsec_secpath *bgpsec_secpath_new(void);
+
+extern void bgpsec_secpath_free(struct bgpsec_secpath *secpath);
+
+extern void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath);
+
+extern void bgpsec_sigseg_free(struct bgpsec_sigseg *sigseg);
+
+extern void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg);
+
 #endif /* _QUAGGA_BGP_ASPATH_H */

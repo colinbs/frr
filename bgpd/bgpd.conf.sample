@@ -6,14 +6,19 @@
 !
 hostname bgpd
 password zebra
+log file /home/colin/git/frr/bgpd/bgplog.log
+debug bgpsec
 !enable password please-set-at-here
 !
 !
 router bgp 7675
-! bgp router-id 10.0.0.1
-! network 10.0.0.0/8
-! neighbor 10.0.0.2 remote-as 7675
-! neighbor 10.0.0.2 ebgp-multihop
+  bgp router-id 10.0.0.1
+    network 10.0.0.0/8
+    neighbor 10.0.0.2 remote-as 7675
+    neighbor 10.0.0.2 capability bgpsec send ipv4
+    neighbor 10.0.0.2 capability bgpsec send ipv6
+    neighbor 10.0.0.2 capability bgpsec receive ipv4
+    neighbor 10.0.0.2 capability bgpsec receive ipv6
 !
 ! address-family ipv4 unicast
 !  neighbor 10.0.0.2 route-map set-nexthop out
@@ -28,4 +33,3 @@ router bgp 7675
 !
 !log file bgpd.log
 !
-log stdout

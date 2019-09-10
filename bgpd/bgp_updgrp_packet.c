@@ -793,7 +793,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 			 * attr. */
 			total_attr_len = bgp_packet_attribute(
 				NULL, peer, s, adv->baa->attr, &vecarr, NULL,
-				afi, safi, from, NULL, NULL, 0, 0, 0);
+				afi, safi, from, NULL, NULL, 0, 0, 0, &rn->p);
 
 			space_remaining =
 				STREAM_CONCAT_REMAIN(s, snlri, STREAM_SIZE(s))
@@ -829,9 +829,13 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 		}
 
 		if ((afi == AFI_IP && safi == SAFI_UNICAST)
-		    && !peer_cap_enhe(peer, afi, safi))
+		    && !peer_cap_enhe(peer, afi, safi)
+            && (!CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
+               &&
+               !CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6))
+            )
 			stream_put_prefix_addpath(s, rn_p, addpath_encode,
-						  addpath_tx_id);
+                                      addpath_tx_id);
 		else {
 			/* Encode the prefix in MP_REACH_NLRI attribute */
 			if (rn->prn)
@@ -1168,7 +1172,7 @@ void subgroup_default_update_packet(struct update_subgroup *subgrp,
 	stream_putw(s, 0);
 	total_attr_len = bgp_packet_attribute(
 		NULL, peer, s, attr, &vecarr, &p, afi, safi, from, NULL, NULL,
-		0, addpath_encode, BGP_ADDPATH_TX_ID_FOR_DEFAULT_ORIGINATE);
+		0, addpath_encode, BGP_ADDPATH_TX_ID_FOR_DEFAULT_ORIGINATE, NULL);
 
 	/* Set Total Path Attribute Length. */
 	stream_putw_at(s, pos, total_attr_len);

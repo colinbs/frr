@@ -9,5 +9,5 @@
             --localstatedir=/var/run/frr \
             --disable-nhrpd \
             --enable-vty-group=frrvty \
-            --enable-user=frr \
-            --enable-group=frr
+            --enable-user=colin \
+            --enable-group=colin

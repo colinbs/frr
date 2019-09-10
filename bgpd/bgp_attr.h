@@ -425,18 +425,18 @@ static inline uint32_t mac_mobility_seqnum(struct attr *attr)
 
 #include "hook.h"
 #include "bgp_aspath.h"
-DECLARE_HOOK(bgp_gen_bgpsec_sig,
-		(struct peer *peer, struct attr *attr, struct bgp *bgp,
-		 struct prefix *p, struct bgpsec_secpath *own_secpath,
-         struct bgpsec_sigseg **own_sigseg),
-		(peer, attr, bgp, p, own_secpath, own_sigseg))
-
 DECLARE_HOOK(bgp_attr_bgpsec_path, (struct bgp_attr_parser_args *args), (args))
 
-DECLARE_HOOK(bgp_write_bgpsec_aspath_to_stream,
-			(struct stream *s, struct bgpsec_aspath *aspath,
-			int *length, struct bgpsec_secpath own_secpath,
-			struct bgpsec_sigseg *own_sigseg),
-			(s, aspath, length, own_secpath, own_sigseg))
+DECLARE_HOOK(bgp_packet_build_bgpsec_aspath,
+            (struct bgp *bgp, struct peer *peer, struct stream *s,
+            struct attr *attr, struct prefix *bgpsec_p, afi_t afi,
+            safi_t safi),
+            (bgp, peer, s, attr, bgpsec_p, afi, safi))
+
+DECLARE_HOOK(bgp_val_bgpsec_aspath,
+            (struct bgpsec_aspath *bgpsecpath,
+            struct peer *peer,
+            struct bgp_nlri *mp_update),
+            (bgpsecpath, peer, mp_update))
 
 #endif /* _QUAGGA_BGP_ATTR_H */

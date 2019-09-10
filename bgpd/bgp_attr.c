@@ -56,19 +56,19 @@
 #include "bgp_flowspec_private.h"
 #include "bgp_mac.h"
 
-DEFINE_HOOK(bgp_gen_bgpsec_sig,
-		(struct peer *peer, struct attr *attr, struct bgp *bgp,
-		 struct prefix *p, struct bgpsec_secpath *own_secpath,
-         struct bgpsec_sigseg **own_sigseg),
-		(peer, attr, bgp, p, own_secpath, own_sigseg))
-
 DEFINE_HOOK(bgp_attr_bgpsec_path, (struct bgp_attr_parser_args *args), (args))
 
-DEFINE_HOOK(bgp_write_bgpsec_aspath_to_stream,
-			(struct stream *s, struct bgpsec_aspath *aspath,
-			int *length, struct bgpsec_secpath own_secpath,
-			struct bgpsec_sigseg *own_sigseg),
-			(s, aspath, length, own_secpath, own_sigseg))
+DEFINE_HOOK(bgp_packet_build_bgpsec_aspath,
+            (struct bgp *bgp, struct peer *peer, struct stream *s,
+            struct attr *attr, struct prefix *bgpsec_p, afi_t afi,
+            safi_t safi),
+            (bgp, peer, s, attr, bgpsec_p, afi, safi))
+
+DEFINE_HOOK(bgp_val_bgpsec_aspath,
+            (struct bgpsec_aspath *bgpsecpath,
+            struct peer *peer,
+            struct bgp_nlri *mp_update),
+            (bgpsecpath, peer, mp_update))
 
 /* Attribute strings for logging. */
 static const struct message attr_str[] = {
@@ -2836,7 +2836,8 @@ static int bgp_attr_check(struct peer *peer, struct attr *attr)
 	if (!CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_ORIGIN)))
 		type = BGP_ATTR_ORIGIN;
 
-	if (!CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_AS_PATH)))
+	if (!CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_AS_PATH)) &&
+        !CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_BGPSEC_PATH)))
 		type = BGP_ATTR_AS_PATH;
 
 	/* RFC 2858 makes Next-Hop optional/ignored, if MP_REACH_NLRI is present
@@ -3196,6 +3197,13 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	/* Check all mandatory well-known attributes are present */
 	if ((ret = bgp_attr_check(peer, attr)) < 0)
 		goto done;
+
+    /* Append the prefix information to the BGPsec AS path */
+    if (attr->bgpsecpath) {
+        if (mp_update) {
+            hook_call(bgp_val_bgpsec_aspath, attr->bgpsecpath, peer, mp_update);
+        }
+    }
 
 	/*
 	 * At this place we can see whether we got AS4_PATH and/or
@@ -3618,7 +3626,8 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 				struct prefix *p, afi_t afi, safi_t safi,
 				struct peer *from, struct prefix_rd *prd,
 				mpls_label_t *label, uint32_t num_labels,
-				int addpath_encode, uint32_t addpath_tx_id)
+				int addpath_encode, uint32_t addpath_tx_id,
+                struct prefix *bgpsec_p)
 {
 	size_t cp;
 	size_t aspath_sizep;
@@ -3634,6 +3643,16 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 
 	/* Remember current pointer. */
 	cp = stream_get_endp(s);
+
+    zlog_debug("PEER_FLAG_BGPSEC_SEND_IPV4: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4));
+    zlog_debug("PEER_FLAG_BGPSEC_SEND_IPV6: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6));
+    zlog_debug("PEER_FLAG_BGPSEC_RECEIVE_IPV4: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4));
+    zlog_debug("PEER_FLAG_BGPSEC_RECEIVE_IPV6: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6));
+
+    //TODO: check for IPv6
+    if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)) {
+        use_bgpsec = 1;
+    }
 
 	if (p
 	    && !((afi == AFI_IP && safi == SAFI_UNICAST)
@@ -3698,6 +3717,8 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	} else
 		aspath = attr->aspath;
 
+    /* If BGPsec ist not enabled, add the AS_PATH attribute. A BGPsec Update
+     * must not include the AS_PATH attribute. */
 	if (!use_bgpsec) {
 		/* If peer is not AS4 capable, then:
 		 * - send the created AS_PATH out as AS4_PATH (optional, transitive),
@@ -3725,8 +3746,8 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		send_as4_path =
 			1; /* we'll do this later, at the correct place */
 
-	if (!send_as4_path)
-		use_bgpsec = 0; /* Only use BGPsec if 4-byte ASNs are compatible */
+	/*if (!send_as4_path)*/
+		//use_bgpsec = 0; /* Only use BGPsec if 4-byte ASNs are compatible */
 
 	/* Nexthop attribute. */
 	if (afi == AFI_IP && safi == SAFI_UNICAST
@@ -4026,61 +4047,9 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 
 	// BGPsecHook to append path to packet.
 	if (use_bgpsec) {
-		int bgpsec_attrlen = 0;
-		struct bgpsec_secpath own_secpath = {NULL, 1, 0, bgp->as};
-		struct bgpsec_sigseg *own_sigseg = NULL;
-		int ret = 0;
-
-        /* Check, if the peer can receive bgpsec updates, and we
-         * can also send bgpsec updates */
-        if (CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV)
-            && (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
-            || CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)))
-        {
-            //TODO: only eBGP is covered right now.
-            if (peer->sort == BGP_PEER_EBGP || peer->sort == BGP_PEER_CONFED) {
-                /* Set the confed flag if required */
-                if (peer->sort == BGP_PEER_CONFED) {
-                    own_secpath.flags = 0x80;
-                }
-                /* Set the pCount to the appropriate value */
-                //TODO: AS migration and pCounts > 1 are
-                // currently ignored.
-                if (peer->sort != BGP_PEER_CONFED) {
-                    own_secpath.pcount = 0;
-                }
-            }
-        }
-
-        /* If bgpsecpath is empty, this is an origin message */
-        if (!attr->bgpsecpath)
-            attr->bgpsecpath = bgpsec_aspath_new();
-
-		// BGPsecHook to generate a signature
-        /* Create the signature before writing the BGPsec path to the stream.
-         * This saves stripping the path data from the stream again, in case
-         * the signature could not be generated.
-         */
-		ret = hook_call(bgp_gen_bgpsec_sig, peer, attr, bgp, p,
-                        &own_secpath, &own_sigseg);
-
-        if (ret) {
-            //TODO: error handling.
-        }
-
-		if (!own_sigseg) {
-			//TODO: abort
-            XFREE(MTYPE_ATTR, own_sigseg->signature);
-		}
-
-        stream_putc(s, BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_EXTLEN);
-        stream_putc(s, BGP_ATTR_BGPSEC_PATH);
-		aspath_sizep = stream_get_endp(s);
-		stream_putw(s, 0);
-		// BGPsecHook to write BGPsec data to stream.
-		ret = hook_call(bgp_write_bgpsec_aspath_to_stream, s, attr->bgpsecpath,
-						&bgpsec_attrlen, own_secpath, own_sigseg);
-        stream_putw_at(s, aspath_sizep, bgpsec_attrlen);
+        int ret = hook_call(bgp_packet_build_bgpsec_aspath,
+                            bgp, peer, s, attr, bgpsec_p, afi, safi);
+        use_bgpsec = !ret;
 	} else if (send_as4_path) {
 		/* If the peer is NOT As4 capable, AND */
 		/* there are ASnums > 65535 in path  THEN
