@@ -420,12 +420,21 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
     //TODO: set the path here for now. There needs to be a DEFUN to do this,
     //though.
     bgp->priv_key->filepath = "/home/colin/git/frr/bgpd/privkey.der";
+    static uint8_t dummyski[] = {
+        0x47, 0xF2, 0x3B, 0xF1, 0xAB,
+        0x2F, 0x8A, 0x9D, 0x26, 0x86,
+        0x4E, 0xBB, 0xD8, 0xDF, 0x27,
+        0x11, 0xC7, 0x44, 0x06, 0xEC
+    };
+    memcpy(bgp->priv_key->ski, dummyski, SKI_SIZE);
 
     load_private_key_from_file(bgp->priv_key);
 
     retval = rtr_mgr_bgpsec_generate_signature(bgpsec,
                                                bgp->priv_key->key_buffer,
                                                &new_ss);
+    memcpy(new_ss->ski, bgp->priv_key->ski, SKI_SIZE);
+
     if (retval != RTR_BGPSEC_SUCCESS) {
         BGPSEC_DEBUG("Error while generating signature");
         bgpsec_secpath_free(own_secpath);
@@ -629,12 +638,71 @@ static struct rtr_mgr_group *get_groups(void)
 	return rtr_mgr_groups;
 }
 
+static int add_cache(struct cache *cache)
+{
+	uint8_t preference = cache->preference;
+	struct rtr_mgr_group group;
+
+	group.preference = preference;
+	group.sockets_len = 1;
+	group.sockets = &cache->rtr_socket;
+
+	listnode_add(cache_list, cache);
+
+	if (rtr_is_running) {
+		init_tr_socket(cache);
+
+		if (rtr_mgr_add_group(rtr_config, &group) != RTR_SUCCESS) {
+            if (cache->type == TCP)
+                tr_tcp_init(cache->tr_config.tcp_config,
+                        cache->tr_socket);
+			return ERROR;
+		}
+	}
+
+	return SUCCESS;
+}
+
+static int add_tcp_cache(const char *host, const char *port,
+			 const uint8_t preference)
+{
+	struct rtr_socket *rtr_socket;
+	struct tr_tcp_config *tcp_config =
+		XMALLOC(MTYPE_BGP_RPKI_CACHE, sizeof(struct tr_tcp_config));
+	struct tr_socket *tr_socket =
+		XMALLOC(MTYPE_BGP_RPKI_CACHE, sizeof(struct tr_socket));
+	struct cache *cache =
+		XMALLOC(MTYPE_BGP_RPKI_CACHE, sizeof(struct cache));
+
+	tcp_config->host = XSTRDUP(MTYPE_BGP_RPKI_CACHE, host);
+	tcp_config->port = XSTRDUP(MTYPE_BGP_RPKI_CACHE, port);
+	tcp_config->bindaddr = NULL;
+
+	rtr_socket =
+		XMALLOC(MTYPE_BGP_RPKI_CACHE, sizeof(struct rtr_socket));
+	rtr_socket->tr_socket = tr_socket;
+
+	cache->type = TCP;
+	cache->tr_socket = tr_socket;
+	cache->tr_config.tcp_config = tcp_config;
+	cache->rtr_socket = rtr_socket;
+	cache->preference = preference;
+
+	return add_cache(cache);
+}
+
+
 static int start(void)
 {
 	unsigned int waiting_time = 0;
 	int ret;
 
 	rtr_is_starting = 1;
+
+    ret = add_tcp_cache("rpki-validator.realmv6.org", "8282", 1);
+    if (ret == ERROR) {
+        return ERROR;
+    }
 
 	if (list_isempty(cache_list)) {
 		return ERROR;
@@ -673,6 +741,31 @@ static int start(void)
 }
 // DELETEME----
 
+static void copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
+                                 struct rtr_bgpsec *data)
+{
+    struct rtr_secure_path_seg *sec;
+    struct rtr_signature_seg *sig;
+
+    while (sec) {
+        data->path_len = bgpsecpath->path_count;
+        sec = rtr_mgr_bgpsec_new_secure_path_seg(bgpsecpath->secpaths->pcount,
+                                                 bgpsecpath->secpaths->flags,
+                                                 bgpsecpath->secpaths->as);
+        rtr_mgr_bgpsec_prepend_sec_path_seg(data, sec);
+        sec = sec->next;
+    }
+
+    while (sig) {
+        data->sigs_len = bgpsecpath->sigblock1->sig_count;
+        sig = rtr_mgr_bgpsec_new_signature_seg(bgpsecpath->sigblock1->sigsegs->ski,
+                                               bgpsecpath->sigblock1->sigsegs->sig_len,
+                                               bgpsecpath->sigblock1->sigsegs->signature);
+        rtr_mgr_bgpsec_prepend_sig_seg(data, sig);
+        sig = sig->next;
+    }
+}
+
 static int val_bgpsec_aspath(struct bgpsec_aspath *bgpsecpath,
                              struct peer *peer,
                              struct bgp_nlri *mp_update)
@@ -681,10 +774,14 @@ static int val_bgpsec_aspath(struct bgpsec_aspath *bgpsecpath,
     struct spki_record *record;
     struct rtr_bgpsec_nlri *pfx;
     struct rtr_bgpsec *data;
+    uint32_t ipv4;
 
     pfx = XMALLOC(MTYPE_AS_PATH, sizeof(struct rtr_bgpsec_nlri));
 
-    pfx->prefix_len = mp_update->length;
+    // The first byte of the NLRI is the length in bits.
+    pfx->prefix_len = mp_update->nlri[0];
+    mp_update->nlri++; // Increment to skip the NLRI-length byte.
+    ipv4 = (uint32_t)mp_update->nlri;
     switch (mp_update->afi) {
     case AFI_IP:
         pfx->prefix.ver = LRTR_IPV4;
@@ -701,6 +798,8 @@ static int val_bgpsec_aspath(struct bgpsec_aspath *bgpsecpath,
                               peer->local_as,
                               peer->local_as,
                               *pfx);
+
+    copy_rtr_data_to_frr(bgpsecpath, data);
 
     /*spki_table_init(&table, NULL);*/
     record = create_record(peer->as, ski1, spki1);
@@ -859,6 +958,7 @@ static int bgp_bgpsec_init(struct thread_master *master)
     int bgpsec_debug = 0;
     int rtr_is_running = 0;
     int rtr_is_stopping = 0;
+    int ret = 0;
 
     cache_list = list_new();
     /*cache_list->del = (void (*)(void *)) & free_cache;*/
@@ -871,7 +971,10 @@ static int bgp_bgpsec_init(struct thread_master *master)
         /*INITIAL_SYNCHRONISATION_TIMEOUT_DEFAULT;*/
     install_cli_commands();
     /*rpki_init_sync_socket();*/
-    start();
+    ret = start();
+    if (ret == 0) {
+        BGPSEC_DEBUG("DONT OPTIMIZE ME, AHHHH");
+    }
 	return 0;
 }
 
