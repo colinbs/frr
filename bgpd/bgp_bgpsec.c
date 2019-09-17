@@ -766,6 +766,69 @@ static void copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
     }
 }
 
+static int niptoh(uint8_t *n_ip, uint8_t *h_ip, uint8_t len)
+{
+    uint8_t *start;
+    uint8_t real_len = 0;
+
+    if (!n_ip || !h_ip || len == 0)
+        return -1;
+
+    /* Move pointer to first non-zero byte */
+    while (*n_ip == 0) {
+        n_ip++;
+        len--;
+    }
+
+    start = n_ip;
+
+    for (int i = 0, j = (len - 1); i < len; i++, j--) {
+        h_ip[i] = n_ip[j];
+    }
+
+    return len;
+}
+
+static int nip6toh(uint8_t *n_ip, uint8_t *h_ip, uint8_t len)
+{
+    uint8_t rest_len = len;
+    int pos = 0;
+
+    if (!n_ip || !h_ip || len == 0)
+        return -1;
+
+    /* Move pointer to first non-zero byte */
+    for (int i = 0; i < len; i++) {
+        if (n_ip[i] == 0) {
+            n_ip++;
+            len--;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
+        uint8_t bytes[4];
+        memset(bytes, 0, sizeof(bytes));
+        if (rest_len > 4) {
+            niptoh(n_ip, bytes, 4);
+            h_ip[pos++] = bytes[0];
+            h_ip[pos++] = bytes[1];
+            h_ip[pos++] = bytes[2];
+            h_ip[pos++] = bytes[3];
+            rest_len -= 4;
+            n_ip += 4;
+        } else {
+            niptoh(n_ip, bytes, rest_len);
+            for (int j = 0; j < rest_len; j++) {
+                h_ip[pos++] = bytes[j];
+            }
+        }
+    }
+    
+    return len;
+}
+
 static int val_bgpsec_aspath(struct bgpsec_aspath *bgpsecpath,
                              struct peer *peer,
                              struct bgp_nlri *mp_update)
@@ -774,22 +837,29 @@ static int val_bgpsec_aspath(struct bgpsec_aspath *bgpsecpath,
     struct spki_record *record;
     struct rtr_bgpsec_nlri *pfx;
     struct rtr_bgpsec *data;
-    uint32_t ipv4;
+    uint8_t prefix_len_b;
+    uint8_t h_ip[4];
+    uint8_t h_ip6[16];
 
     pfx = XMALLOC(MTYPE_AS_PATH, sizeof(struct rtr_bgpsec_nlri));
 
     // The first byte of the NLRI is the length in bits.
-    pfx->prefix_len = mp_update->nlri[0];
+    pfx->prefix_len = *mp_update->nlri;
     mp_update->nlri++; // Increment to skip the NLRI-length byte.
-    ipv4 = (uint32_t)mp_update->nlri;
+    prefix_len_b = (pfx->prefix_len + 7) / 8;
+
     switch (mp_update->afi) {
     case AFI_IP:
         pfx->prefix.ver = LRTR_IPV4;
-        memcpy(&(pfx->prefix.u.addr4.addr), mp_update->nlri, (pfx->prefix_len + 7) / 8);
+        memset(h_ip, 0, sizeof(h_ip));
+        niptoh(mp_update->nlri, h_ip, prefix_len_b);
+        memcpy(&(pfx->prefix.u.addr4.addr), h_ip, prefix_len_b);
         break;
     case AFI_IP6:
         pfx->prefix.ver = LRTR_IPV6;
-        memcpy(pfx->prefix.u.addr6.addr, mp_update->nlri, (pfx->prefix_len + 7) / 8);
+        memset(h_ip6, 0, sizeof(h_ip6));
+        nip6toh(mp_update->nlri, h_ip6, prefix_len_b);
+        memcpy(pfx->prefix.u.addr6.addr, mp_update->nlri, prefix_len_b);
         break;
     }
     data = rtr_mgr_bgpsec_new(bgpsecpath->sigblock1->alg,

@@ -906,9 +906,11 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 
 		adj->attr = bgp_attr_intern(adv->baa->attr);
 next:
+
 		adv = bgp_advertise_clean_subgroup(subgrp, adj);
 	}
 
+    // TODO: Move this into the loop.
 	if (!stream_empty(s)) {
 		if (!stream_empty(snlri)) {
 			bgp_packet_mpattr_end(snlri, mpattrlen_pos);
@@ -921,6 +923,7 @@ next:
 		if (!stream_empty(snlri)) {
 			packet = stream_dupcat(s, snlri, mpattr_pos);
 			bpacket_attr_vec_arr_update(&vecarr, mpattr_pos);
+            // TODO: reset snlri if BGPsec is active.
 		} else
 			packet = stream_dup(s);
 		bgp_packet_set_size(packet);
