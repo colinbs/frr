@@ -2294,6 +2294,32 @@ struct bgpsec_aspath *bgpsec_aspath_new(void)
     return aspath;
 }
 
+void bgpsec_free(struct *bgpsec_aspath bgpsec)
+{
+    if (!bgpsec)
+        return;
+
+    if (secpaths)
+        bgpsec_secpath_free_all(bgpsec->secpaths);
+
+    if (bgpsec->sigblock1) {
+        if (bgpsec->sigblock1->sigsegs)
+            bgpsec_sigseg_free_all(bgpsec->sigblock1->sigsegs);
+        XFREE(MTYPE_AS_PATH, bgpsec->sigblock1);
+    }
+
+    if (bgpsec->sigblock2) {
+        if (bgpsec->sigblock2->sigsegs)
+            bgpsec_sigseg_free_all(bgpsec->sigblock2->sigsegs);
+        XFREE(MTYPE_AS_PATH, bgpsec->sigblock2);
+    }
+
+    if (bgpsec->str)
+        XFREE(MTYPE_AS_PATH, bgpsec->str);
+
+    XFREE(MTYPE_AS_PATH, bgpsec);
+}
+
 struct bgpsec_sigblock *bgpsec_sigblock_new(void)
 {
     struct bgpsec_sigblock *sigblock =

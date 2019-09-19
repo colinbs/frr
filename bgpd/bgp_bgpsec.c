@@ -945,6 +945,7 @@ static int build_bgpsec_aspath(struct bgp *bgp,
                                       &bgpsec_attrlen, own_secpath,
                                       own_sigseg);
         stream_putw_at(s, aspath_sizep, bgpsec_attrlen);
+        bgpsec_free(attr->bgpsecpath);
     }
 
     return 0;
