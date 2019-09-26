@@ -214,6 +214,8 @@ extern void bgp_aggr_aspath_remove(void *arg);
 
 extern struct bgpsec_aspath *bgpsec_aspath_new(void);
 
+extern void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec);
+
 extern struct bgpsec_sigblock *bgpsec_sigblock_new(void);
 
 extern struct bgpsec_sigseg *bgpsec_sigseg_new(void);

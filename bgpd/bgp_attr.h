@@ -434,9 +434,9 @@ DECLARE_HOOK(bgp_packet_build_bgpsec_aspath,
             (bgp, peer, s, attr, bgpsec_p, afi, safi))
 
 DECLARE_HOOK(bgp_val_bgpsec_aspath,
-            (struct bgpsec_aspath *bgpsecpath,
+            (struct attr *attr,
             struct peer *peer,
             struct bgp_nlri *mp_update),
-            (bgpsecpath, peer, mp_update))
+            (attr, peer, mp_update))
 
 #endif /* _QUAGGA_BGP_ATTR_H */

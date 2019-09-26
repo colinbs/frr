@@ -874,6 +874,58 @@ struct aspath *aspath_parse(struct stream *s, size_t length, int use32bit)
 	return find;
 }
 
+struct aspath *bgpsec_aspath_parse(struct attr *attr)
+{
+	struct aspath *as;
+    struct aspath *find;
+	struct assegment *seg, *prev = NULL, *head = NULL;
+    struct bgpsec_aspath *path = attr->bgpsecpath;
+
+    memset(as, 0, sizeof(struct aspath));
+    for (uint16_t i = 0; i < path->path_count; i++) {
+        struct bgpsec_secpath *sec = path->secpaths;
+        uint8_t type;
+
+        if (sec->flags & 0x8 == 1)
+            type = AS_CONFED_SEQUENCE;
+        else
+            type = AS_SEQUENCE;
+
+		seg = assegment_new(type, 1);
+
+		if (head)
+			prev->next = seg;
+		else /* it's the first segment */
+			head = prev = seg;
+
+        *(seg->as) = sec->as;
+
+		prev = seg;
+	}
+
+	as = assegment_normalise(head);
+
+	find = hash_get(ashash, as, aspath_hash_alloc);
+
+	/* bug! should not happen, let the daemon crash below */
+	assert(find);
+
+	/* if the aspath was already hashed free temporary memory. */
+	if (find->refcnt) {
+		assegment_free_all(as->segments);
+		/* aspath_key_make() always updates the string */
+		XFREE(MTYPE_AS_STR, as->str);
+		if (as->json) {
+			json_object_free(as->json);
+			as->json = NULL;
+		}
+	}
+
+	find->refcnt++;
+
+	return find;
+}
+
 static void assegment_data_put(struct stream *s, as_t *as, int num,
 			       int use32bit)
 {
@@ -2277,7 +2329,7 @@ void bgp_remove_aspath_from_aggregate_hash(struct bgp_aggregate *aggregate,
 struct bgpsec_aspath *bgpsec_aspath_new(void)
 {
     struct bgpsec_aspath *aspath =
-        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_aspath));
+        XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_aspath));
 
     aspath->refcnt = 0;
     //TODO: only allocate memory if you need it.
@@ -2294,23 +2346,29 @@ struct bgpsec_aspath *bgpsec_aspath_new(void)
     return aspath;
 }
 
-void bgpsec_free(struct *bgpsec_aspath bgpsec)
+void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec)
 {
     if (!bgpsec)
         return;
 
-    if (secpaths)
+    if (bgpsec->secpaths) {
         bgpsec_secpath_free_all(bgpsec->secpaths);
+        bgpsec->secpaths = NULL;
+    }
 
     if (bgpsec->sigblock1) {
-        if (bgpsec->sigblock1->sigsegs)
+        if (bgpsec->sigblock1->sigsegs) {
             bgpsec_sigseg_free_all(bgpsec->sigblock1->sigsegs);
+            bgpsec->sigblock1->sigsegs = NULL;
+        }
         XFREE(MTYPE_AS_PATH, bgpsec->sigblock1);
     }
 
     if (bgpsec->sigblock2) {
-        if (bgpsec->sigblock2->sigsegs)
+        if (bgpsec->sigblock2->sigsegs) {
             bgpsec_sigseg_free_all(bgpsec->sigblock2->sigsegs);
+            bgpsec->sigblock2->sigsegs = NULL;
+        }
         XFREE(MTYPE_AS_PATH, bgpsec->sigblock2);
     }
 
@@ -2356,7 +2414,8 @@ struct bgpsec_secpath *bgpsec_secpath_new(void)
 
 void bgpsec_secpath_free(struct bgpsec_secpath *secpath)
 {
-    XFREE(MTYPE_AS_PATH, secpath);
+    if (secpath)
+        XFREE(MTYPE_AS_PATH, secpath);
 }
 
 void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath)
@@ -2372,8 +2431,10 @@ void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath)
 
 void bgpsec_sigseg_free(struct bgpsec_sigseg *sigseg)
 {
-    XFREE(MTYPE_AS_PATH, sigseg->signature);
-    XFREE(MTYPE_AS_PATH, sigseg);
+    if (sigseg && sigseg->signature)
+        XFREE(MTYPE_AS_PATH, sigseg->signature);
+    if (sigseg)
+        XFREE(MTYPE_AS_PATH, sigseg);
 }
 
 void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg)

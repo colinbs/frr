@@ -65,10 +65,10 @@ DEFINE_HOOK(bgp_packet_build_bgpsec_aspath,
             (bgp, peer, s, attr, bgpsec_p, afi, safi))
 
 DEFINE_HOOK(bgp_val_bgpsec_aspath,
-            (struct bgpsec_aspath *bgpsecpath,
+            (struct attr *attr,
             struct peer *peer,
             struct bgp_nlri *mp_update),
-            (bgpsecpath, peer, mp_update))
+            (attr, peer, mp_update))
 
 /* Attribute strings for logging. */
 static const struct message attr_str[] = {
@@ -2883,6 +2883,7 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	struct aspath *as4_path = NULL;
 	as_t as4_aggregator = 0;
 	struct in_addr as4_aggregator_addr = {.s_addr = 0};
+    int use_bgpsec = 0;
 
 	/* Initialize bitmap. */
 	memset(seen, 0, BGP_ATTR_BITMAP_SIZE);
@@ -3201,7 +3202,18 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
     /* Append the prefix information to the BGPsec AS path */
     if (attr->bgpsecpath) {
         if (mp_update) {
-            hook_call(bgp_val_bgpsec_aspath, attr->bgpsecpath, peer, mp_update);
+            ret = hook_call(bgp_val_bgpsec_aspath, attr, peer, mp_update);
+            /* Anything execpt a valid BGPsec AS path will result in
+             * AS_PATH reconstruction.
+             */
+            //TODO: differentiate between, valid, invalid and error.
+            if (ret == 0) {
+                bgpsec_to_aspath(attr);
+                use_bgpsec = 1;
+            } else {
+                //TODO: AS_PATH reconstruction. Remember to set the
+                //BGP_ATTR_AS_PATH flag.
+            }
         }
     }
 
@@ -3234,7 +3246,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	 * Finally do the checks on the aspath we did not do yet
 	 * because we waited for a potentially synthesized aspath.
 	 */
-	if (attr->flag & (ATTR_FLAG_BIT(BGP_ATTR_AS_PATH))) {
+	if (attr->flag & (ATTR_FLAG_BIT(BGP_ATTR_AS_PATH))
+        || use_bgpsec) {
 		ret = bgp_attr_aspath_check(peer, attr);
 		if (ret != BGP_ATTR_PARSE_PROCEED)
 			goto done;
@@ -3643,11 +3656,6 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 
 	/* Remember current pointer. */
 	cp = stream_get_endp(s);
-
-    zlog_debug("PEER_FLAG_BGPSEC_SEND_IPV4: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4));
-    zlog_debug("PEER_FLAG_BGPSEC_SEND_IPV6: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6));
-    zlog_debug("PEER_FLAG_BGPSEC_RECEIVE_IPV4: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4));
-    zlog_debug("PEER_FLAG_BGPSEC_RECEIVE_IPV6: %d", CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6));
 
     //TODO: check for IPv6
     if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)) {
