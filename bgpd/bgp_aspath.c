@@ -848,7 +848,7 @@ struct aspath *aspath_parse(struct stream *s, size_t length, int use32bit)
 	if (length % AS16_VALUE_SIZE)
 		return NULL;
 
-	memset(&as, 0, sizeof(struct aspath));
+    memset(&as, 0, sizeof(struct aspath));
 	if (assegments_parse(s, length, &as.segments, use32bit) < 0)
 		return NULL;
 
@@ -874,19 +874,23 @@ struct aspath *aspath_parse(struct stream *s, size_t length, int use32bit)
 	return find;
 }
 
+/* This function is basically a combination of aspath_parse
+ * and assegments_parse but without streams. The AS information
+ * is gathered from attr->bgpsecpath */
 struct aspath *bgpsec_aspath_parse(struct attr *attr)
 {
 	struct aspath *as;
     struct aspath *find;
 	struct assegment *seg, *prev = NULL, *head = NULL;
+    struct assegment *dup_seg = NULL;
     struct bgpsec_aspath *path = attr->bgpsecpath;
+    struct bgpsec_secpath *sec = path->secpaths;
+    uint8_t type;
 
-    memset(as, 0, sizeof(struct aspath));
+    as = XCALLOC(MTYPE_AS_PATH, sizeof(struct aspath));
     for (uint16_t i = 0; i < path->path_count; i++) {
-        struct bgpsec_secpath *sec = path->secpaths;
-        uint8_t type;
 
-        if (sec->flags & 0x8 == 1)
+        if ((sec->flags | 0x8) == 1)
             type = AS_CONFED_SEQUENCE;
         else
             type = AS_SEQUENCE;
@@ -901,9 +905,19 @@ struct aspath *bgpsec_aspath_parse(struct attr *attr)
         *(seg->as) = sec->as;
 
 		prev = seg;
+
+        /* If the pcount is > 1, append the same AS path segment
+         * additional pcount-1 times. */
+        for (uint8_t j = 1; j < sec->pcount; j++) {
+            dup_seg = assegment_dup(seg);
+            prev->next = dup_seg;
+            prev = dup_seg;
+        }
+
+        sec = sec->next;
 	}
 
-	as = assegment_normalise(head);
+    as->segments = assegment_normalise(head);
 
 	find = hash_get(ashash, as, aspath_hash_alloc);
 

@@ -1738,7 +1738,7 @@ bgp_attr_munge_as4_attrs(struct peer *const peer, struct attr *const attr,
 	int ignore_as4_path = 0;
 	struct aspath *newpath;
 
-	if (!attr->aspath) {
+	if (!attr->aspath && !attr->bgpsecpath) {
 		/* NULL aspath shouldn't be possible as bgp_attr_parse should
 		 * have
 		 * checked that all well-known, mandatory attributes were
@@ -3208,7 +3208,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
              */
             //TODO: differentiate between, valid, invalid and error.
             if (ret == 0) {
-                bgpsec_to_aspath(attr);
+                attr->aspath = bgpsec_aspath_parse(attr);
+                attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_AS_PATH);
                 use_bgpsec = 1;
             } else {
                 //TODO: AS_PATH reconstruction. Remember to set the

@@ -212,6 +212,8 @@ extern void bgp_remove_aspath_from_aggregate_hash(
 
 extern void bgp_aggr_aspath_remove(void *arg);
 
+struct aspath *bgpsec_aspath_parse(struct attr *attr);
+
 extern struct bgpsec_aspath *bgpsec_aspath_new(void);
 
 extern void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec);

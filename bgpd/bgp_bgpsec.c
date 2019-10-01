@@ -865,13 +865,13 @@ static int val_bgpsec_aspath(struct attr *attr,
 
     // The first byte of the NLRI is the length in bits.
     pfx->prefix_len = *mp_pfx->nlri;
-    mp_pfx->nlri++; // Increment to skip the NLRI-length byte.
+    /*mp_pfx->nlri++; // Increment to skip the NLRI-length byte.*/
     prefix_len_b = (pfx->prefix_len + 7) / 8;
 
     switch (mp_pfx->afi) {
     case AFI_IP:
         pfx->prefix.ver = LRTR_IPV4;
-        memcpy(&n_ip, mp_pfx->nlri, prefix_len_b);
+        memcpy(&n_ip, (mp_pfx->nlri + 1), prefix_len_b); //inc nlri to skip len
         /*h_ip = ntohl(n_ip);*/
         h_ip = n_ip;
         memcpy(&(pfx->prefix.u.addr4.addr), &h_ip, sizeof(h_ip));
@@ -880,7 +880,7 @@ static int val_bgpsec_aspath(struct attr *attr,
         pfx->prefix.ver = LRTR_IPV6;
         memset(h_ip6, 0, sizeof(h_ip6));
         /*nip6toh(mp_pfx->nlri, h_ip6, prefix_len_b);*/
-        memcpy(pfx->prefix.u.addr6.addr, mp_pfx->nlri, prefix_len_b);
+        memcpy(pfx->prefix.u.addr6.addr, (mp_pfx->nlri + 1), prefix_len_b); //inc nlri to skip len
         break;
     }
     data = rtr_mgr_bgpsec_new(bgpsecpath->sigblock1->alg,
