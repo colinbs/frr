@@ -2109,14 +2109,6 @@ DEFUNSH(VTYSH_VRF, exit_vrf_config, exit_vrf_config_cmd, "exit-vrf",
     return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_PIMD|VTYSH_ZEBRA, exit_vrf_config, exit_vrf_config_cmd, "exit-vrf",
-	"Exit from VRF configuration mode\n")
-{
-	if (vty->node == VRF_NODE)
-		vty->node = CONFIG_NODE;
-	return CMD_SUCCESS;
-}
-
 DEFUNSH(VTYSH_BGPD, exit_vrf_policy, exit_vrf_policy_cmd, "exit-vrf-policy",
 	"Exit from VRF policy configuration mode\n")
 {
