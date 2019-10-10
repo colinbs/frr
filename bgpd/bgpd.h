@@ -2021,6 +2021,8 @@ int bgp_peer_gr_init(struct peer *peer);
 		}                                                              \
 	} while (0)
 
+extern int bgp_use_bgpsec(struct peer *peer, afi_t afi, safi_t safi);
+
 static inline struct bgp *bgp_lock(struct bgp *bgp)
 {
 	bgp->lock++;

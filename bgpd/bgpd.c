@@ -7235,3 +7235,22 @@ void bgp_gr_apply_running_config(void)
 		gr_router_detected = false;
 	}
 }
+
+/* If AFI is IPv4 and BGPsec can send IPv4
+ * or
+ * if AFI is IPv6 and BGPsec can send IPv6
+ * and SAFI is Unicast
+ */
+int bgp_use_bgpsec(struct peer *peer, afi_t afi, safi_t safi)
+{
+    if (((CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
+    && (afi == AFI_IP))
+    ||
+    (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)
+    && (afi == AFI_IP6)))
+    && safi == SAFI_UNICAST) {
+        return 1;
+    }
+    return 0;
+}
+

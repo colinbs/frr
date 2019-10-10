@@ -830,9 +830,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 
 		if ((afi == AFI_IP && safi == SAFI_UNICAST)
 		    && !peer_cap_enhe(peer, afi, safi)
-            && (!CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
-               &&
-               !CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6))
+            && !bgp_use_bgpsec(peer, afi, safi)
             )
 			stream_put_prefix_addpath(s, rn_p, addpath_encode,
                                       addpath_tx_id);

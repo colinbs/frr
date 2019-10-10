@@ -2078,6 +2078,7 @@ DEFUNSH(VTYSH_BGPD, rpki_quit, rpki_quit_cmd, "quit",
 
 DEFUNSH(VTYSH_BGPD, bgpsec_exit, bgpsec_exit_cmd, "exit",
 	"Exit current mode and down to previous mode\n")
+{
 	vtysh_exit(vty);
 	return CMD_SUCCESS;
 }

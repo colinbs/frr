@@ -702,7 +702,7 @@ static int start(void)
 
 	rtr_is_starting = 1;
 
-    ret = add_tcp_cache("rpki-validator.realmv6.org", "8282", 1);
+    ret = add_tcp_cache("rpki-validator.realmv6.org", "8283", 1);
     if (ret == ERROR) {
         return ERROR;
     }

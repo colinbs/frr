@@ -3658,8 +3658,8 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 	/* Remember current pointer. */
 	cp = stream_get_endp(s);
 
-    //TODO: check for IPv6
-    if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)) {
+    /* Check, if bgpsec can be used */
+    if (bgp_use_bgpsec(peer, afi, safi)) {
         use_bgpsec = 1;
     }
 
@@ -3760,7 +3760,8 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 
 	/* Nexthop attribute. */
 	if (afi == AFI_IP && safi == SAFI_UNICAST
-	    && !peer_cap_enhe(peer, afi, safi)) {
+	    && !peer_cap_enhe(peer, afi, safi)
+        && !use_bgpsec) {
 		afi_t nh_afi = BGP_NEXTHOP_AFI_FROM_NHLEN(attr->mp_nexthop_len);
 
 		if (attr->flag & ATTR_FLAG_BIT(BGP_ATTR_NEXT_HOP)) {
