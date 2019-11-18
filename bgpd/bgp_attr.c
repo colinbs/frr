@@ -3661,6 +3661,10 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
     /* Check, if bgpsec can be used */
     if (bgp_use_bgpsec(peer, afi, safi)) {
         use_bgpsec = 1;
+    } else {
+        UNSET_FLAG(attr->flag, BGP_ATTR_BGPSEC_PATH);
+        if (attr->bgpsecpath)
+            bgpsec_aspath_free(attr->bgpsecpath);
     }
 
 	if (p
@@ -3759,6 +3763,7 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		//use_bgpsec = 0; /* Only use BGPsec if 4-byte ASNs are compatible */
 
 	/* Nexthop attribute. */
+    zlog_debug("XXXXXX use_bgpsec = %d, flags = %d, cap = %d", use_bgpsec, peer->flags, peer->cap);
 	if (afi == AFI_IP && safi == SAFI_UNICAST
 	    && !peer_cap_enhe(peer, afi, safi)
         && !use_bgpsec) {

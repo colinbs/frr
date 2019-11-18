@@ -1043,13 +1043,14 @@ struct peer {
 #define PEER_CAP_ENHE_RCV                   (1 << 14) /* Extended nexthop received */
 #define PEER_CAP_HOSTNAME_ADV               (1 << 15) /* hostname advertised */
 #define PEER_CAP_HOSTNAME_RCV               (1 << 16) /* hostname received */
-#define PEER_CAP_BGPSEC_SEND_ADV            (1 << 17) /* bgpsec send advertised */
-#define PEER_CAP_BGPSEC_SEND_RCV            (1 << 18) /* bgpsec send received */
-#define PEER_CAP_BGPSEC_RECEIVE_ADV         (1 << 19) /* bgpsec receive advertised */
-#define PEER_CAP_BGPSEC_RECEIVE_RCV         (1 << 20) /* bgpsec receive received */
-	//TODO: what are cap and flags for?
-	//Where is the difference?
-	//When do I use what?
+#define PEER_CAP_BGPSEC_SEND_IPV4_ADV       (1 << 17) /* bgpsec send IPv4 advertised */
+#define PEER_CAP_BGPSEC_SEND_IPV6_ADV       (1 << 18) /* bgpsec send IPv6 advertised */
+#define PEER_CAP_BGPSEC_SEND_IPV4_RCV       (1 << 19) /* bgpsec send IPv4 received */
+#define PEER_CAP_BGPSEC_SEND_IPV6_RCV       (1 << 20) /* bgpsec send IPv6 received */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV    (1 << 21) /* bgpsec receive IPv4 advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV    (1 << 22) /* bgpsec receive IPv6 advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV    (1 << 23) /* bgpsec receive IPv4 received */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV    (1 << 24) /* bgpsec receive IPv6 received */
 
 	/* Capability flags (reset in bgp_stop) */
 	uint32_t af_cap[AFI_MAX][SAFI_MAX];
@@ -2150,7 +2151,8 @@ static inline int peer_dynamic_neighbor(struct peer *peer)
 
 static inline int peer_cap_enhe(struct peer *peer, afi_t afi, safi_t safi)
 {
-	return (CHECK_FLAG(peer->af_cap[afi][safi], PEER_CAP_ENHE_AF_NEGO));
+    int retval = (CHECK_FLAG(peer->af_cap[afi][safi], PEER_CAP_ENHE_AF_NEGO));
+	return retval;
 }
 
 /* Lookup VRF for BGP instance based on its type. */

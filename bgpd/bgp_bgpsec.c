@@ -161,6 +161,9 @@ static void free_wrapper(void *ptr)
 	XFREE(MTYPE_BGP_BGPSEC_VALIDATION, ptr);
 }
 
+/*
+ * Parse a received BGPsec capability.
+ */
 static int capability_bgpsec(struct peer *peer,
 			     struct capability_header *hdr)
 {
@@ -183,13 +186,11 @@ static int capability_bgpsec(struct peer *peer,
 	/* check, if the receive capability is set for IPv4/6
 	 */
 	if ((version_dir | (BGPSEC_DIR_RECEIVE << 3)) == 0) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV);
-
 		//TODO: The flags are set by the user via the vty for a certain peer.
         if (afi == AFI_IP) {
-            SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);
+            SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV);
         } else if (afi == AFI_IP6) {
-            SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);
+            SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV);
         } else {
             /*TODO: gives strange error code output in test.*/
             flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
@@ -207,13 +208,11 @@ static int capability_bgpsec(struct peer *peer,
 	/* check, if the send capability is set set for IPv4/6
 	 */
 	if (version_dir & (BGPSEC_DIR_SEND << 3)) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_RCV);
-
 		//TODO: The flags are set by the user via the vty for a certain peer.
         if (afi == AFI_IP) {
-            SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4);
+            SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_IPV4_RCV);
         } else if (afi == AFI_IP6) {
-            SET_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV6);
+            SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_IPV6_RCV);
         } else {
             /*TODO: gives strange error code output in test.*/
             flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
@@ -239,7 +238,7 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 	/* BGPsec IPv4 send capability
 	 */
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_ADV);
+		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_IPV4_ADV);
 		stream_putc(s, BGP_OPEN_OPT_CAP);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC);
@@ -261,7 +260,7 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 	/* BGPsec IPv4 receive capability
 	 */
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_RECEIVE_IPV4)) {
-		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_ADV);
+		SET_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV);
 		stream_putc(s, BGP_OPEN_OPT_CAP);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC_LEN + 2);
 		stream_putc(s, CAPABILITY_CODE_BGPSEC);
@@ -280,7 +279,6 @@ static int put_bgpsec_cap(struct stream *s, struct peer *peer)
 		}
 	}
 
-	//TODO: check if ipv6 capable
 	/* BGPsec IPv6 send capability
 	 */
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)) {
@@ -476,14 +474,10 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 	uint8_t alg = 0;
 	bgp_size_t remain_len = length;
 
-    /*for (i = 0; i < length; i++) {*/
-        /*printf("%02X\n", stream_getc(peer->curr));*/
-    /*}*/
-
 	sec_path_count = (stream_getw(peer->curr) - 2) / BGPSEC_SECURE_PATH_SEGMENT_SIZE;
 	remain_len -= 2;
 
-	bgpsecpath = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_aspath));
+    bgpsecpath = bgpsec_aspath_new();
 
 	/* Build the secure path segments from the stream */
 	for (int i = 0; i < sec_path_count; i++) {
@@ -925,7 +919,8 @@ static int build_bgpsec_aspath(struct bgp *bgp,
 
     /* Check, if the peer can receive bgpsec updates, and we
      * can also send bgpsec updates */
-    if (CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_RCV)
+    if ((CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV) ||
+        CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV))
         && (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
         || CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)))
     {

@@ -7240,17 +7240,36 @@ void bgp_gr_apply_running_config(void)
  * or
  * if AFI is IPv6 and BGPsec can send IPv6
  * and SAFI is Unicast
+ * The appropriate receive values must be set for the peer.
  */
 int bgp_use_bgpsec(struct peer *peer, afi_t afi, safi_t safi)
 {
-    if (((CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
+    int retval = 0;
+    if ((CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
     && (afi == AFI_IP))
     ||
     (CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)
-    && (afi == AFI_IP6)))
-    && safi == SAFI_UNICAST) {
-        return 1;
+    && (afi == AFI_IP6))) {
+        retval = 1;
+    } else {
+        return 0;
     }
-    return 0;
+
+    if ((CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV)
+    && (afi == AFI_IP))
+    ||
+    (CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV)
+    && (afi == AFI_IP6))) {
+        retval = 1;
+    } else {
+        return 0;
+    }
+
+    if (safi == SAFI_UNICAST)
+        retval = 1;
+    else
+        return 0;
+
+    return retval;
 }
 
