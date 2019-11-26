@@ -97,6 +97,7 @@ static const struct message attr_str[] = {
 	{BGP_ATTR_VNC, "VNC"},
 #endif
 	{BGP_ATTR_LARGE_COMMUNITIES, "LARGE_COMMUNITY"},
+    {BGP_ATTR_BGPSEC_PATH, "BGPSEC_PATH"},
 	{BGP_ATTR_PREFIX_SID, "PREFIX_SID"},
 	{0}};
 
@@ -1210,6 +1211,7 @@ bgp_attr_malformed(struct bgp_attr_parser_args *args, uint8_t subcode,
 		return BGP_ATTR_PARSE_WITHDRAW;
 	case BGP_ATTR_MP_REACH_NLRI:
 	case BGP_ATTR_MP_UNREACH_NLRI:
+    case BGP_ATTR_BGPSEC_PATH:
 		bgp_notify_send_with_data(peer, BGP_NOTIFY_UPDATE_ERR, subcode,
 					  notify_datap, length);
 		return BGP_ATTR_PARSE_ERROR;
@@ -1289,6 +1291,7 @@ const uint8_t attr_flags_values[] = {
 	[BGP_ATTR_PMSI_TUNNEL] = BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANS,
 	[BGP_ATTR_LARGE_COMMUNITIES] =
 		BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANS,
+    [BGP_ATTR_BGPSEC_PATH] = BGP_ATTR_FLAG_OPTIONAL,
 	[BGP_ATTR_PREFIX_SID] = BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANS,
 };
 static const size_t attr_flags_values_max = array_size(attr_flags_values) - 1;
@@ -3196,8 +3199,16 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	}
 
 	/* Check all mandatory well-known attributes are present */
+<<<<<<< HEAD
 	if ((ret = bgp_attr_check(peer, attr)) < 0)
 		goto done;
+=======
+	if ((ret = bgp_attr_check(peer, attr)) < 0) {
+		if (as4_path)
+			aspath_unintern(&as4_path);
+		return ret;
+	}
+>>>>>>> 51f472d77... bgpsec: fix NEXT_HOP not being set properly.
 
     /* Append the prefix information to the BGPsec AS path */
     if (attr->bgpsecpath) {
@@ -3662,7 +3673,17 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
     if (bgp_use_bgpsec(peer, afi, safi)) {
         use_bgpsec = 1;
     } else {
-        UNSET_FLAG(attr->flag, BGP_ATTR_BGPSEC_PATH);
+    /* If BGPsec should not be forwarded, yet the received update was a BGPsec
+     * update AND the AFI was AFI_IP, unset the BGP_ATTR_BGPSEC_PATH and
+     * BGP_ATTR_MP_REACH_NLRI flags and set the BGP_ATTR_NEXT_HOP flag. This
+     * is rather hacky but it works for now.
+     */
+        if (attr->flag & ATTR_FLAG_BIT(BGP_ATTR_BGPSEC_PATH))
+            UNSET_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_BGPSEC_PATH));
+        if (afi == AFI_IP) {
+            UNSET_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_MP_REACH_NLRI));
+            SET_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_NEXT_HOP));
+        }
         if (attr->bgpsecpath)
             bgpsec_aspath_free(attr->bgpsecpath);
     }
@@ -3763,7 +3784,6 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		//use_bgpsec = 0; /* Only use BGPsec if 4-byte ASNs are compatible */
 
 	/* Nexthop attribute. */
-    zlog_debug("XXXXXX use_bgpsec = %d, flags = %d, cap = %d", use_bgpsec, peer->flags, peer->cap);
 	if (afi == AFI_IP && safi == SAFI_UNICAST
 	    && !peer_cap_enhe(peer, afi, safi)
         && !use_bgpsec) {
