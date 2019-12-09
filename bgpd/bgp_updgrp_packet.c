@@ -678,7 +678,7 @@ bool subgroup_packets_to_build(struct update_subgroup *subgrp)
 struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 {
 	struct bpacket_attr_vec_arr vecarr;
-	struct bpacket *pkt;
+	/*struct bpacket *pkt;*/
 	struct peer *peer;
 	struct stream *s;
 	struct stream *snlri;
@@ -905,37 +905,38 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 		adj->attr = bgp_attr_intern(adv->baa->attr);
 next:
 
+        // TODO: reset s if BGPsec is active to make sure that
+        // another packet will be build.
+        if (!stream_empty(s)) {
+            if (!stream_empty(snlri)) {
+                bgp_packet_mpattr_end(snlri, mpattrlen_pos);
+                total_attr_len += stream_get_endp(snlri);
+            }
+
+            /* set the total attribute length correctly */
+            stream_putw_at(s, attrlen_pos, total_attr_len);
+
+            if (!stream_empty(snlri)) {
+                packet = stream_dupcat(s, snlri, mpattr_pos);
+                bpacket_attr_vec_arr_update(&vecarr, mpattr_pos);
+            } else
+                packet = stream_dup(s);
+            bgp_packet_set_size(packet);
+            if (bgp_debug_update(NULL, NULL, subgrp->update_group, 0))
+                zlog_debug("u%" PRIu64 ":s%" PRIu64
+                       " send UPDATE len %zd numpfx %d",
+                       subgrp->update_group->id, subgrp->id,
+                       (stream_get_endp(packet)
+                        - stream_get_getp(packet)),
+                       num_pfx);
+            bpacket_queue_add(SUBGRP_PKTQ(subgrp), packet, &vecarr);
+            stream_reset(s);
+            stream_reset(snlri);
+        }
+
 		adv = bgp_advertise_clean_subgroup(subgrp, adj);
     }
 
-    // TODO: Move this into the loop.
-    if (!stream_empty(s)) {
-        if (!stream_empty(snlri)) {
-            bgp_packet_mpattr_end(snlri, mpattrlen_pos);
-            total_attr_len += stream_get_endp(snlri);
-        }
-
-        /* set the total attribute length correctly */
-        stream_putw_at(s, attrlen_pos, total_attr_len);
-
-        if (!stream_empty(snlri)) {
-            packet = stream_dupcat(s, snlri, mpattr_pos);
-            bpacket_attr_vec_arr_update(&vecarr, mpattr_pos);
-        } else
-            packet = stream_dup(s);
-        bgp_packet_set_size(packet);
-        if (bgp_debug_update(NULL, NULL, subgrp->update_group, 0))
-            zlog_debug("u%" PRIu64 ":s%" PRIu64
-                   " send UPDATE len %zd numpfx %d",
-                   subgrp->update_group->id, subgrp->id,
-                   (stream_get_endp(packet)
-                    - stream_get_getp(packet)),
-                   num_pfx);
-        pkt = bpacket_queue_add(SUBGRP_PKTQ(subgrp), packet, &vecarr);
-        stream_reset(s);
-        stream_reset(snlri);
-        return pkt;
-	}
 	return NULL;
 }
 

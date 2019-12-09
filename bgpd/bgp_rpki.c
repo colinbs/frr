@@ -64,9 +64,6 @@
 #include "bgpd/bgp_rpki_clippy.c"
 #endif
 
-DEFINE_MTYPE_STATIC(BGPD, BGP_RPKI_CACHE, "BGP RPKI Cache server")
-DEFINE_MTYPE_STATIC(BGPD, BGP_RPKI_CACHE_GROUP, "BGP RPKI Cache server group")
-
 #define RPKI_VALID      1
 #define RPKI_NOTFOUND   2
 #define RPKI_INVALID    3

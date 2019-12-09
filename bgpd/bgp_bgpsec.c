@@ -73,15 +73,11 @@
 		zlog_debug("BGPSEC: " __VA_ARGS__);                              \
 	}
 
-#define BGPSEC_OUTPUT_STRING "Control BGPsec specific settings\n"
+#define BGPSEC_OUTPUT_STR "Control BGPsec specific settings\n"
 
 #define BGPSEC_SECURE_PATH_SEGMENT_SIZE 6
 
 #define PRIV_KEY_BUFFER_SIZE 500
-
-DEFINE_MTYPE_STATIC(BGPD, BGP_BGPSEC_VALIDATION, "BGP BGPsec AS path validation")
-DEFINE_MTYPE_STATIC(BGPD, BGP_RPKI_CACHE, "BGP RPKI Cache server")
-DEFINE_MTYPE_STATIC(BGPD, BGP_RPKI_CACHE_GROUP, "BGP RPKI Cache server group")
 
 struct cache {
 	enum { TCP, SSH } type;
@@ -131,7 +127,13 @@ static int val_bgpsec_aspath(struct attr *attr,
                              struct peer *peer,
                              struct bgp_nlri *mp_update);
 
+struct private_key *bgpsec_private_key_new(void);
+
 static int load_private_key_from_file(struct private_key *priv_key);
+
+static void bgpsec_private_key_free(struct private_key *priv_key);
+
+static int bgpsec_cleanup(struct bgp *bgp);
 
 struct bgpsec_aspath *bgpsc_aspath_new(void);
 
@@ -148,17 +150,17 @@ static struct cmd_node bgpsec_node = {BGPSEC_NODE, "%s(config-bgpsec)# ", 1};
 
 static void *malloc_wrapper(size_t size)
 {
-	return XMALLOC(MTYPE_BGP_BGPSEC_VALIDATION, size);
+	return XMALLOC(MTYPE_BGP_BGPSEC, size);
 }
 
 static void *realloc_wrapper(void *ptr, size_t size)
 {
-	return XREALLOC(MTYPE_BGP_BGPSEC_VALIDATION, ptr, size);
+	return XREALLOC(MTYPE_BGP_BGPSEC, ptr, size);
 }
 
 static void free_wrapper(void *ptr)
 {
-	XFREE(MTYPE_BGP_BGPSEC_VALIDATION, ptr);
+	XFREE(MTYPE_BGP_BGPSEC, ptr);
 }
 
 /*
@@ -365,7 +367,7 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
 
     /* Use RTRlib struct to store the prefix, AFI and length.
      * Store a IPv4/6 address according to the AFI. */
-    pfx = XMALLOC(MTYPE_AS_PATH, sizeof(struct rtr_bgpsec_nlri));
+    pfx = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct rtr_bgpsec_nlri));
     pfx->prefix_len = p->prefixlen;
     switch (afi) {
     case AFI_IP:
@@ -414,23 +416,29 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
         curr_sec = curr_sec->next;
     }
 
-    bgp->priv_key = XMALLOC(MTYPE_AS_PATH, sizeof(struct private_key));
-    //TODO: set the path here for now. There needs to be a DEFUN to do this,
-    //though.
-    bgp->priv_key->filepath = "/home/colin/git/frr/bgpd/privkey.der";
-    static uint8_t dummyski[] = {
-        0xAB, 0x4D, 0x91, 0x0F, 0x55,
-        0xCA, 0xE7, 0x1A, 0x21, 0x5E,
-        0xF3, 0xCA, 0xFE, 0x3A, 0xCC,
-        0x45, 0xB5, 0xEE, 0xC1, 0x54
-    };
-        /*0x47, 0xF2, 0x3B, 0xF1, 0xAB,*/
-        /*0x2F, 0x8A, 0x9D, 0x26, 0x86,*/
-        /*0x4E, 0xBB, 0xD8, 0xDF, 0x27,*/
-        /*0x11, 0xC7, 0x44, 0x06, 0xEC*/
-    memcpy(bgp->priv_key->ski, dummyski, SKI_SIZE);
+    /*bgp->priv_key = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct private_key));*/
+    /*//TODO: set the path here for now. There needs to be a DEFUN to do this,*/
+    /*//though.*/
+    /*bgp->priv_key->filepath = "/home/colin/git/frr/bgpd/privkey.der";*/
+    /*static uint8_t dummyski[] = {*/
+        /*0xAB, 0x4D, 0x91, 0x0F, 0x55,*/
+        /*0xCA, 0xE7, 0x1A, 0x21, 0x5E,*/
+        /*0xF3, 0xCA, 0xFE, 0x3A, 0xCC,*/
+        /*0x45, 0xB5, 0xEE, 0xC1, 0x54*/
+    /*};*/
+        /*[>0x47, 0xF2, 0x3B, 0xF1, 0xAB,<]*/
+        /*[>0x2F, 0x8A, 0x9D, 0x26, 0x86,<]*/
+        /*[>0x4E, 0xBB, 0xD8, 0xDF, 0x27,<]*/
+        /*[>0x11, 0xC7, 0x44, 0x06, 0xEC<]*/
+    /*memcpy(bgp->priv_key->ski, dummyski, SKI_SIZE);*/
 
-    load_private_key_from_file(bgp->priv_key);
+    /*load_private_key_from_file(bgp->priv_key);*/
+
+    if (!bgp->priv_key) {
+        BGPSEC_DEBUG("Error: private key not loaded");
+        bgpsec_secpath_free(own_secpath);
+        return 1;
+    }
 
     retval = rtr_mgr_bgpsec_generate_signature(bgpsec,
                                                bgp->priv_key->key_buffer,
@@ -444,9 +452,9 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
     }
 
     /* Init the own_sigseg struct */
-    *own_sigseg = XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
+    *own_sigseg = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));
     memset(*own_sigseg, 0, sizeof(struct bgpsec_sigseg));
-    (*own_sigseg)->signature = XMALLOC(MTYPE_ATTR, new_ss->sig_len);
+    (*own_sigseg)->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH, new_ss->sig_len);
 
     /* Copy the signature and its length to the input parameters. */
     (*own_sigseg)->next = NULL;
@@ -454,7 +462,7 @@ static int gen_bgpsec_sig(struct peer *peer, struct attr *attr,
     (*own_sigseg)->sig_len = new_ss->sig_len;
     memcpy((*own_sigseg)->ski, new_ss->ski, SKI_LENGTH);
 
-    XFREE(MTYPE_AS_PATH, pfx);
+    XFREE(MTYPE_BGP_BGPSEC_PATH, pfx);
 	return 0;
 }
 
@@ -470,7 +478,7 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 	struct bgpsec_sigseg *curr_sig_path = NULL;
 	struct bgpsec_sigseg *prev_sig_path = NULL;
 	uint16_t sec_path_count = 0;
-	uint16_t sigblock_len = 0;
+	uint16_t sig_segs_len = 0;
 	uint8_t alg = 0;
 	bgp_size_t remain_len = length;
 
@@ -501,12 +509,16 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 
 	/* Parse the first signature block from the stream and build the
 	 * signature paths segments */
-	sigblock1 = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_sigblock));
+	sigblock1 = bgpsec_sigblock_new();
     sigblock1->sig_count = 0;
-	sigblock1->length = sigblock_len = stream_getw(peer->curr) - 3;
+	sigblock1->length = stream_getw(peer->curr);
 	sigblock1->alg = alg = stream_getc(peer->curr);
-	while (sigblock_len > 0) {
-		curr_sig_path = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_sigseg));
+
+    /* Subtract 3 (length and algorithm) from the total sigblock length to get
+     * the length of the signature segments only. */
+    sig_segs_len = sigblock1->length - 3;
+	while (sig_segs_len > 0) {
+		curr_sig_path = bgpsec_sigseg_new();
 
 		if (prev_sig_path) {
 			prev_sig_path->next = curr_sig_path;
@@ -517,17 +529,22 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 
 		stream_get(curr_sig_path->ski, peer->curr, 20);
 		curr_sig_path->sig_len = stream_getw(peer->curr);
-        curr_sig_path->signature = XMALLOC(MTYPE_AS_PATH,
+        curr_sig_path->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH,
                                            curr_sig_path->sig_len);
 		stream_get(curr_sig_path->signature, peer->curr, curr_sig_path->sig_len);
 
 		prev_sig_path = curr_sig_path;
-		sigblock_len -= 22 + curr_sig_path->sig_len;
+		sig_segs_len -= 22 + curr_sig_path->sig_len;
 
         sigblock1->sig_count++;
 	}
 	bgpsecpath->sigblock1 = sigblock1;
 	remain_len -= sigblock1->length;
+
+    // TODO: propper error handling in case some bytes are left in the end.
+    if (remain_len > 0) {
+        zlog_debug("Strange, there are still %d bytes left...", remain_len);
+    }
 
 	attr->bgpsecpath = bgpsecpath;
     attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_BGPSEC_PATH);
@@ -558,6 +575,13 @@ static uint8_t ski1[]  = {
         0x45, 0xB5, 0xEE, 0xC1, 0x54
 };
 
+static uint8_t ski2[]  = {
+		0x47, 0xF2, 0x3B, 0xF1, 0xAB,
+		0x2F, 0x8A, 0x9D, 0x26, 0x86,
+		0x4E, 0xBB, 0xD8, 0xDF, 0x27,
+		0x11, 0xC7, 0x44, 0x06, 0xEC
+};
+
 static uint8_t spki1[] = {
 		0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce,
 		0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d,
@@ -569,6 +593,19 @@ static uint8_t spki1[] = {
         0x55, 0xD9, 0xD4, 0xF5, 0xC0, 0xDF, 0xC5, 0x88, 0x95, 0xEE,
         0x50, 0xBC, 0x4F, 0x75, 0xD2, 0x05, 0xA2, 0x5B, 0xD3, 0x6F,
         0xF5
+};
+
+static uint8_t spki2[] = {
+		0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE,
+		0x3D, 0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D,
+		0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04, 0x28, 0xFC, 0x5F,
+		0xE9, 0xAF, 0xCF, 0x5F, 0x4C, 0xAB, 0x3F, 0x5F, 0x85, 0xCB,
+		0x21, 0x2F, 0xC1, 0xE9, 0xD0, 0xE0, 0xDB, 0xEA, 0xEE, 0x42,
+		0x5B, 0xD2, 0xF0, 0xD3, 0x17, 0x5A, 0xA0, 0xE9, 0x89, 0xEA,
+		0x9B, 0x60, 0x3E, 0x38, 0xF3, 0x5F, 0xB3, 0x29, 0xDF, 0x49,
+		0x56, 0x41, 0xF2, 0xBA, 0x04, 0x0F, 0x1C, 0x3A, 0xC6, 0x13,
+		0x83, 0x07, 0xF2, 0x57, 0xCB, 0xA6, 0xB8, 0xB5, 0x88, 0xF4,
+		0x1F
 };
 
 static int load_private_key_from_file(struct private_key *priv_key)
@@ -588,13 +625,12 @@ static int load_private_key_from_file(struct private_key *priv_key)
     if (length <= 0)
         return 1;
 
-    priv_key->key_buffer = XMALLOC(MTYPE_AS_PATH, length);
+    priv_key->key_buffer = XMALLOC(MTYPE_BGP_BGPSEC_PRIV_KEY, length);
     if (!(priv_key->key_buffer))
         return 1;
 
     memcpy(priv_key->key_buffer, &tmp_buff, length);
     priv_key->key_len = length;
-    priv_key->loaded = true;
 
     return 0;
 }
@@ -692,6 +728,8 @@ static int add_tcp_cache(const char *host, const char *port,
 static int start(void)
 {
 	unsigned int waiting_time = 0;
+    struct spki_record *record1;
+    struct spki_record *record2;
 	int ret;
 
 	rtr_is_starting = 1;
@@ -732,11 +770,19 @@ static int start(void)
 		rtr_is_starting = 0;
 	}
 
+    record1 = create_record(64496, ski1, spki1);
+    rtr_mgr_bgpsec_add_spki_record(rtr_config, record1);
+
+    record2 = create_record(65536, ski2, spki2);
+    rtr_mgr_bgpsec_add_spki_record(rtr_config, record2);
+
 	XFREE(MTYPE_BGP_RPKI_CACHE_GROUP, groups);
+    free(record1);
+    free(record2);
 
 	return SUCCESS;
 }
-// DELETEME----
+// ----DELETEME
 
 static void copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
                                  struct rtr_bgpsec *data)
@@ -758,46 +804,6 @@ static void copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
         rtr_mgr_bgpsec_prepend_sig_seg(data, sig);
     }
 }
-
-/*static int nip6toh(uint8_t *n_ip, uint32_t *h_ip, uint8_t len)*/
-/*{*/
-    /*uint8_t rest_len = len;*/
-    /*int pos = 0;*/
-
-    /*if (!n_ip || !h_ip || len == 0)*/
-        /*return -1;*/
-
-    /*[> Move pointer to first non-zero byte <]*/
-    /*for (int i = 0; i < len; i++) {*/
-        /*if (n_ip[i] == 0) {*/
-            /*n_ip++;*/
-            /*len--;*/
-        /*} else {*/
-            /*break;*/
-        /*}*/
-    /*}*/
-
-    /*for (int i = 0; i < 4; i++) {*/
-        /*uint8_t bytes[4];*/
-        /*memset(bytes, 0, sizeof(bytes));*/
-        /*if (rest_len > 4) {*/
-            /*niptoh(n_ip, bytes, 4);*/
-            /*h_ip[pos++] = bytes[0];*/
-            /*h_ip[pos++] = bytes[1];*/
-            /*h_ip[pos++] = bytes[2];*/
-            /*h_ip[pos++] = bytes[3];*/
-            /*rest_len -= 4;*/
-            /*n_ip += 4;*/
-        /*} else {*/
-            /*niptoh(n_ip, bytes, rest_len);*/
-            /*for (int j = 0; j < rest_len; j++) {*/
-                /*h_ip[pos++] = bytes[j];*/
-            /*}*/
-        /*}*/
-    /*}*/
-    
-    /*return len;*/
-/*}*/
 
 static void handle_result(struct peer *peer, enum rtr_bgpsec_rtvals result)
 {
@@ -845,7 +851,6 @@ static int val_bgpsec_aspath(struct attr *attr,
                              struct bgp_nlri *mp_update)
 {
     enum rtr_bgpsec_rtvals result;
-    struct spki_record *record;
     struct rtr_bgpsec_nlri *pfx;
     struct rtr_bgpsec *data;
     struct bgpsec_aspath *bgpsecpath = attr->bgpsecpath;
@@ -855,7 +860,7 @@ static int val_bgpsec_aspath(struct attr *attr,
     uint32_t h_ip = 0;
     uint32_t h_ip6[4];
 
-    pfx = XMALLOC(MTYPE_AS_PATH, sizeof(struct rtr_bgpsec_nlri));
+    pfx = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct rtr_bgpsec_nlri));
 
     // The first byte of the NLRI is the length in bits.
     pfx->prefix_len = *mp_pfx->nlri;
@@ -886,10 +891,6 @@ static int val_bgpsec_aspath(struct attr *attr,
 
     copy_rtr_data_to_frr(bgpsecpath, data);
 
-    /*spki_table_init(&table, NULL);*/
-    record = create_record(peer->as, ski1, spki1);
-    rtr_mgr_bgpsec_add_spki_record(rtr_config, record);
-    //TODO: handle result.
     result = rtr_mgr_bgpsec_validate_as_path(data, rtr_config);
 
     /* Prints out detailed information of the validation result. */
@@ -953,7 +954,12 @@ static int build_bgpsec_aspath(struct bgp *bgp,
      * This saves stripping the path data from the stream again, in case
      * the signature could not be generated.
      */
-    gen_bgpsec_sig(peer, attr, bgp, bgpsec_p, afi, safi, own_secpath, &own_sigseg);
+    int foo = 0;
+    foo = gen_bgpsec_sig(peer, attr, bgp, bgpsec_p, afi, safi, own_secpath, &own_sigseg);
+    if (foo != 0) {
+        zlog_debug("There has been an error");
+        return 1;
+    }
 
     if (own_sigseg) {
         stream_putc(s, BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_EXTLEN);
@@ -995,8 +1001,8 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     /* Prepend own_secpath to the BGPsec path */
     if (origin) {
         block = aspath->sigblock1;
-        block->sigsegs = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_sigseg));
-        aspath->secpaths = XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_secpath));
+        block->sigsegs = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));
+        aspath->secpaths = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_secpath));
     } else {
         //TODO: own_secpath->next pointer needs to be allocated.
         own_secpath->next = aspath->secpaths;
@@ -1049,6 +1055,35 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     return 0;
 }
 
+struct private_key *bgpsec_private_key_new(void)
+{
+    struct private_key *priv_key;
+
+    priv_key = XMALLOC(MTYPE_BGP_BGPSEC_PRIV_KEY, sizeof(struct private_key));
+
+    if (!priv_key)
+        return NULL;
+
+    return priv_key;
+}
+
+static int bgpsec_cleanup(struct bgp *bgp)
+{
+    bgpsec_private_key_free(bgp->priv_key);
+    bgp->priv_key = NULL;
+    return 0;
+}
+
+static void bgpsec_private_key_free(struct private_key *priv_key)
+{
+    if (!priv_key)
+        return;
+    
+    XFREE(MTYPE_BGP_BGPSEC_PRIV_KEY, priv_key->key_buffer);
+    priv_key->key_buffer = NULL;
+    XFREE(MTYPE_BGP_BGPSEC_PRIV_KEY, priv_key);
+}
+
 static int bgp_bgpsec_init(struct thread_master *master)
 {
     int bgpsec_debug = 0;
@@ -1074,6 +1109,8 @@ static int bgp_bgpsec_init(struct thread_master *master)
 
 static int bgp_bgpsec_fini(void)
 {
+	rtr_mgr_stop(rtr_config);
+	rtr_mgr_free(rtr_config);
     /*stop();*/
     /*list_delete(&cache_list);*/
 
@@ -1098,16 +1135,9 @@ static int bgp_bgpsec_module_init(void)
                   build_bgpsec_aspath);
     hook_register(bgp_val_bgpsec_aspath, val_bgpsec_aspath);
 
-	return 0;
-}
+    hook_register(bgp_bgpsec_cleanup, bgpsec_cleanup);
 
-DEFUN_NOSH (bgpsec,
-            bgpsec_cmd,
-            "bgpsec",
-            "Enable BGPsec and enter BGPsec configuration mode\n")
-{
-	vty->node = BGPSEC_NODE;
-	return CMD_SUCCESS;
+	return 0;
 }
 
 DEFUN (debug_bgpsec,
@@ -1121,6 +1151,53 @@ DEFUN (debug_bgpsec,
 	return CMD_SUCCESS;
 }
 
+DEFUN (bgpsec_private_key,
+       bgpsec_private_key_cmd,
+       "bgpsec privkey WORD",
+       BGPSEC_OUTPUT_STR
+       "Set the BGPsec private key\n"
+       "Set path to BGPsec private key file\n")
+{
+    struct bgp *bgp;
+    int result;
+    int idx_path = 2;
+
+    bgp = bgp_get_default();
+    if (bgp) {
+        if (bgp->priv_key) {
+            bgpsec_private_key_free(bgp->priv_key);
+            bgp->priv_key = NULL;
+        }
+
+        bgp->priv_key = bgpsec_private_key_new();
+
+        if (!bgp->priv_key) {
+            vty_out(vty, "Error while allocating private key memory\n");
+            return CMD_WARNING_CONFIG_FAILED;
+        }
+
+        bgp->priv_key->filepath = (const char *)argv[idx_path]->arg;
+        result = load_private_key_from_file(bgp->priv_key);
+
+        if (result) {
+            vty_out(vty, "Error while loading private key file\n");
+            return CMD_WARNING_CONFIG_FAILED;
+        }
+
+        bgp->priv_key->loaded = true;
+        bgp->priv_key->active = true;
+
+        BGPSEC_DEBUG("Successfully loaded private key %s",
+                     bgp->priv_key->filepath);
+    } else {
+		vty_out(vty, "%% No BGP process is configured\n");
+        return CMD_WARNING;
+    }
+
+    return CMD_SUCCESS;
+}
+
+
 DEFUN (no_debug_bgpsec,
        no_debug_bgpsec_cmd,
        "no debug bgpsec",
@@ -1133,41 +1210,6 @@ DEFUN (no_debug_bgpsec,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgpsec_start,
-       bgpsec_start_cmd,
-       "bgpsec start",
-       BGPSEC_OUTPUT_STRING
-       "start bgpsec support\n")
-{
-    BGPSEC_DEBUG("BGPsec started");
-    struct bgp *bgp;
-    bgp = bgp_get_default();
-    if (bgp)
-        BGPSEC_DEBUG("AS: %d", bgp->as);
-    BGPSEC_DEBUG("No BGP set");
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgpsec_spass,
-       bgpsec_spass_cmd,
-       "bgpsec spass",
-       BGPSEC_OUTPUT_STRING
-       "bgpsec macht spass\n")
-{
-    BGPSEC_DEBUG("SO VIEL SPASS!!!");
-    return CMD_SUCCESS;
-}
-
-DEFUN (bgpsec_stop,
-       bgpsec_stop_cmd,
-       "bgpsec stop",
-       BGPSEC_OUTPUT_STRING
-       "stop bgpsec support\n")
-{
-    BGPSEC_DEBUG("BGPsec stopped");
-	return CMD_SUCCESS;
-}
-
 DEFUN_NOSH (bgpsec_exit,
             bgpsec_exit_cmd,
             "exit",
@@ -1175,7 +1217,7 @@ DEFUN_NOSH (bgpsec_exit,
 {
 	/*reset(false);*/
 
-	vty->node = CONFIG_NODE;
+	vty->node = BGP_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -1216,37 +1258,28 @@ static void overwrite_exit_commands(void)
 		if (strcmp(cmd->string, "exit") == 0
 		    || strcmp(cmd->string, "quit") == 0
 		    || strcmp(cmd->string, "end") == 0) {
-			uninstall_element(BGPSEC_NODE, cmd);
+			uninstall_element(BGP_NODE, cmd);
 		}
 	}
 
-	install_element(BGPSEC_NODE, &bgpsec_exit_cmd);
-	install_element(BGPSEC_NODE, &bgpsec_quit_cmd);
-	install_element(BGPSEC_NODE, &bgpsec_end_cmd);
+	install_element(BGP_NODE, &bgpsec_exit_cmd);
+	install_element(BGP_NODE, &bgpsec_quit_cmd);
+	install_element(BGP_NODE, &bgpsec_end_cmd);
 }
 
 static void install_cli_commands(void)
 {
-	install_node(&bgpsec_node, &config_write);
-	install_default(BGPSEC_NODE);
-	overwrite_exit_commands();
-	install_element(CONFIG_NODE, &bgpsec_cmd);
-	install_element(ENABLE_NODE, &bgpsec_cmd);
+    install_node(&bgpsec_node, &config_write);
+    install_default(BGPSEC_NODE);
+    overwrite_exit_commands();
 
-	install_element(ENABLE_NODE, &bgpsec_start_cmd);
-	install_element(ENABLE_NODE, &bgpsec_stop_cmd);
+    install_element(BGP_NODE, &bgpsec_private_key_cmd);
 
 	/* Install debug commands */
 	install_element(CONFIG_NODE, &debug_bgpsec_cmd);
 	install_element(ENABLE_NODE, &debug_bgpsec_cmd);
 	install_element(CONFIG_NODE, &no_debug_bgpsec_cmd);
 	install_element(ENABLE_NODE, &no_debug_bgpsec_cmd);
-
-    /* Try to append something to the AFI nodes */
-    install_element(BGP_IPV4_NODE, &bgpsec_spass_cmd);
-    install_element(BGP_IPV4M_NODE, &bgpsec_spass_cmd);
-    install_element(BGP_IPV6_NODE, &bgpsec_spass_cmd);
-    install_element(BGP_IPV6M_NODE, &bgpsec_spass_cmd);
 }
 
 FRR_MODULE_SETUP(.name = "bgpd_bgpsec", .version = "0.0.1",

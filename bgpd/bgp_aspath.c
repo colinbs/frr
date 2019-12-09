@@ -2343,7 +2343,7 @@ void bgp_remove_aspath_from_aggregate_hash(struct bgp_aggregate *aggregate,
 struct bgpsec_aspath *bgpsec_aspath_new(void)
 {
     struct bgpsec_aspath *aspath =
-        XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_aspath));
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_aspath));
 
     aspath->refcnt = 0;
     //TODO: only allocate memory if you need it.
@@ -2375,7 +2375,7 @@ void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec)
             bgpsec_sigseg_free_all(bgpsec->sigblock1->sigsegs);
             bgpsec->sigblock1->sigsegs = NULL;
         }
-        XFREE(MTYPE_AS_PATH, bgpsec->sigblock1);
+        XFREE(MTYPE_BGP_BGPSEC_PATH, bgpsec->sigblock1);
     }
 
     if (bgpsec->sigblock2) {
@@ -2383,19 +2383,21 @@ void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec)
             bgpsec_sigseg_free_all(bgpsec->sigblock2->sigsegs);
             bgpsec->sigblock2->sigsegs = NULL;
         }
-        XFREE(MTYPE_AS_PATH, bgpsec->sigblock2);
+        XFREE(MTYPE_BGP_BGPSEC_PATH, bgpsec->sigblock2);
     }
 
+    //TODO: str is not never allocated and the MEMTYPE is therefore not yet
+    //set in stone.
     if (bgpsec->str)
-        XFREE(MTYPE_AS_PATH, bgpsec->str);
+        XFREE(MTYPE_BGP_BGPSEC_PATH, bgpsec->str);
 
-    XFREE(MTYPE_AS_PATH, bgpsec);
+    XFREE(MTYPE_BGP_BGPSEC_PATH, bgpsec);
 }
 
 struct bgpsec_sigblock *bgpsec_sigblock_new(void)
 {
     struct bgpsec_sigblock *sigblock =
-        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigblock));
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigblock));
     sigblock->sigsegs = NULL;
         /*XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));*/
     sigblock->length = 0;
@@ -2408,7 +2410,7 @@ struct bgpsec_sigblock *bgpsec_sigblock_new(void)
 struct bgpsec_sigseg *bgpsec_sigseg_new(void)
 {
     struct bgpsec_sigseg *sigseg =
-        XMALLOC(MTYPE_ATTR, sizeof(struct bgpsec_sigseg));
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));
     sigseg->next = NULL;
     memset(sigseg->ski, 0, sizeof(struct bgpsec_sigseg));
     sigseg->sig_len = 0;
@@ -2418,7 +2420,7 @@ struct bgpsec_sigseg *bgpsec_sigseg_new(void)
 struct bgpsec_secpath *bgpsec_secpath_new(void)
 {
     struct bgpsec_secpath *secpath =
-        XMALLOC(MTYPE_AS_PATH, sizeof(struct bgpsec_secpath));
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_secpath));
     secpath->next = NULL;
     secpath->flags = 0;
     secpath->pcount = 0;
@@ -2429,7 +2431,7 @@ struct bgpsec_secpath *bgpsec_secpath_new(void)
 void bgpsec_secpath_free(struct bgpsec_secpath *secpath)
 {
     if (secpath)
-        XFREE(MTYPE_AS_PATH, secpath);
+        XFREE(MTYPE_BGP_BGPSEC_PATH, secpath);
 }
 
 void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath)
@@ -2446,9 +2448,9 @@ void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath)
 void bgpsec_sigseg_free(struct bgpsec_sigseg *sigseg)
 {
     if (sigseg && sigseg->signature)
-        XFREE(MTYPE_AS_PATH, sigseg->signature);
+        XFREE(MTYPE_BGP_BGPSEC_PATH, sigseg->signature);
     if (sigseg)
-        XFREE(MTYPE_AS_PATH, sigseg);
+        XFREE(MTYPE_BGP_BGPSEC_PATH, sigseg);
 }
 
 void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg)

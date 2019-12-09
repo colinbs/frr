@@ -3684,8 +3684,10 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
             UNSET_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_MP_REACH_NLRI));
             SET_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_NEXT_HOP));
         }
-        if (attr->bgpsecpath)
+        if (attr->bgpsecpath) {
             bgpsec_aspath_free(attr->bgpsecpath);
+            attr->bgpsecpath = NULL;
+        }
     }
 
 	if (p
