@@ -139,6 +139,9 @@ struct bgpsec_aspath *bgpsc_aspath_new(void);
 
 struct bgpsec_sigblock *bgpsec_sigblock_new(void);
 
+static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
+                                struct rtr_bgpsec *data);
+
 static int bgpsec_debug;
 
 static struct rtr_mgr_config *rtr_config;
@@ -531,6 +534,9 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 		curr_sig_path->sig_len = stream_getw(peer->curr);
         curr_sig_path->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH,
                                            curr_sig_path->sig_len);
+        if (!curr_sig_path->signature) {
+            BGPSEC_DEBUG("Error: memory for signature cound not be allocated");
+        }
 		stream_get(curr_sig_path->signature, peer->curr, curr_sig_path->sig_len);
 
 		prev_sig_path = curr_sig_path;
@@ -612,6 +618,7 @@ static int load_private_key_from_file(struct private_key *priv_key)
 {
     FILE *keyfile = fopen(priv_key->filepath, "r");
     uint8_t tmp_buff[PRIV_KEY_BUFFER_SIZE];
+    //TODO: use X509_get0_subject_key_id() on an X509 cert to get the SKI.
     uint16_t length = 0;
 
     if (!keyfile) {
@@ -784,16 +791,20 @@ static int start(void)
 }
 // ----DELETEME
 
-static void copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
-                                 struct rtr_bgpsec *data)
+static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
+                                struct rtr_bgpsec *data)
 {
     struct rtr_secure_path_seg *sec;
     struct rtr_signature_seg *sig;
+    int result;
 
     for (int i = 0; i < bgpsecpath->path_count; i++) {
         sec = rtr_mgr_bgpsec_new_secure_path_seg(bgpsecpath->secpaths->pcount,
                                                  bgpsecpath->secpaths->flags,
                                                  bgpsecpath->secpaths->as);
+        if (!sec)
+            return 1;
+
         rtr_mgr_bgpsec_prepend_sec_path_seg(data, sec);
     }
 
@@ -801,8 +812,18 @@ static void copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
         sig = rtr_mgr_bgpsec_new_signature_seg(bgpsecpath->sigblock1->sigsegs->ski,
                                                bgpsecpath->sigblock1->sigsegs->sig_len,
                                                bgpsecpath->sigblock1->sigsegs->signature);
-        rtr_mgr_bgpsec_prepend_sig_seg(data, sig);
+        if (!sig)
+            return 1;
+
+        result = rtr_mgr_bgpsec_prepend_sig_seg(data, sig);
+
+        if (result == RTR_BGPSEC_ERROR) {
+            BGPSEC_DEBUG("Error, signature cound not be prepended to bgpsec data");
+            return 1;
+        }
     }
+
+    return 0;
 }
 
 static void handle_result(struct peer *peer, enum rtr_bgpsec_rtvals result)
@@ -818,7 +839,7 @@ static void handle_result(struct peer *peer, enum rtr_bgpsec_rtvals result)
         BGPSEC_DEBUG("%s An operation was successful.", peer->host);
         break;
     case RTR_BGPSEC_ERROR:
-        BGPSEC_DEBUG("%s An operation was not sucessful.", peer->host);
+        BGPSEC_DEBUG("%s An operation was not successful.", peer->host);
         break;
     case RTR_BGPSEC_LOAD_PUB_KEY_ERROR:
         BGPSEC_DEBUG("%s The public key could not be loaded.", peer->host);
@@ -841,6 +862,9 @@ static void handle_result(struct peer *peer, enum rtr_bgpsec_rtvals result)
     case RTR_BGPSEC_WRONG_SEGMENT_AMOUNT:
         BGPSEC_DEBUG("%s The amount of signature and secure path segments are not equal.", peer->host);
         break;
+    case RTR_BGPSEC_MISSING_DATA:
+        BGPSEC_DEBUG("%s The data required for signing or validating is not complete.", peer->host);
+        break;
     default:
         break;
     }
@@ -851,14 +875,27 @@ static int val_bgpsec_aspath(struct attr *attr,
                              struct bgp_nlri *mp_update)
 {
     enum rtr_bgpsec_rtvals result;
+    int retval;
     struct rtr_bgpsec_nlri *pfx;
     struct rtr_bgpsec *data;
-    struct bgpsec_aspath *bgpsecpath = attr->bgpsecpath;
+    struct bgpsec_aspath *bgpsecpath;
     struct bgp_nlri *mp_pfx = mp_update;
     uint8_t prefix_len_b;
     uint32_t n_ip = 0;
     uint32_t h_ip = 0;
     uint32_t h_ip6[4];
+
+    if (!attr->bgpsecpath) {
+        BGPSEC_DEBUG("Error: bgpsecpath is empty");
+        return 1;
+    }
+
+    bgpsecpath = attr->bgpsecpath;
+
+    if (!bgpsecpath->sigblock1) {
+        BGPSEC_DEBUG("Error: sigblock1 is empty");
+        return 1;
+    }
 
     pfx = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct rtr_bgpsec_nlri));
 
@@ -882,6 +919,7 @@ static int val_bgpsec_aspath(struct attr *attr,
         memcpy(pfx->prefix.u.addr6.addr, (mp_pfx->nlri + 1), prefix_len_b); //inc nlri to skip len
         break;
     }
+
     data = rtr_mgr_bgpsec_new(bgpsecpath->sigblock1->alg,
                               mp_pfx->safi,
                               mp_pfx->afi,
@@ -889,7 +927,12 @@ static int val_bgpsec_aspath(struct attr *attr,
                               peer->local_as,
                               *pfx);
 
-    copy_rtr_data_to_frr(bgpsecpath, data);
+    retval = copy_rtr_data_to_frr(bgpsecpath, data);
+
+    if (retval) {
+        BGPSEC_DEBUG("Error while copying RTR data to FRR");
+        return 1;
+    }
 
     result = rtr_mgr_bgpsec_validate_as_path(data, rtr_config);
 
