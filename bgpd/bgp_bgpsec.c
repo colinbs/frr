@@ -33,6 +33,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 #include "prefix.h"
 #include "log.h"
 #include "command.h"
@@ -56,6 +57,8 @@
 #include "rtrlib/rtrlib.h"
 #include "rtrlib/transport/tcp/tcp_transport.h"
 #include "rtrlib/spki/spkitable.h"
+/*#include "openssl/x509v3.h"*/
+/*#include "openssl/pem.h"*/
 #if defined(FOUND_SSH)
 #include "rtrlib/transport/ssh/ssh_transport.h"
 #endif
@@ -141,6 +144,10 @@ struct bgpsec_sigblock *bgpsec_sigblock_new(void);
 
 static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
                                 struct rtr_bgpsec *data);
+
+static int chartob16(unsigned char hex_char);
+
+static int ski_char_to_hex(unsigned char *ski, uint8_t *buffer);
 
 static int bgpsec_debug;
 
@@ -618,13 +625,34 @@ static int load_private_key_from_file(struct private_key *priv_key)
 {
     FILE *keyfile = fopen(priv_key->filepath, "r");
     uint8_t tmp_buff[PRIV_KEY_BUFFER_SIZE];
-    //TODO: use X509_get0_subject_key_id() on an X509 cert to get the SKI.
     uint16_t length = 0;
+    //TODO: use X509_get0_subject_key_id() on an X509 cert to get the SKI.
+    /*BIO *bio = BIO_new(BIO_s_file());*/
+    /*X509 *cert = NULL;*/
 
-    if (!keyfile) {
-        BGPSEC_DEBUG("Could not read private key file %s", priv_key->filepath);
-        return 1;
-    }
+    /*if (!keyfile) {*/
+        /*BGPSEC_DEBUG("Could not read private key file %s", priv_key->filepath);*/
+        /*return 1;*/
+    /*}*/
+
+    /*if (!bio) {*/
+        /*BGPSEC_DEBUG("Could not create bio");*/
+        /*return 1;*/
+    /*}*/
+
+    /*if (!BIO_read_filename(bio, priv_key->filepath)) {*/
+        /*BGPSEC_DEBUG("Could not read file in bio");*/
+        /*return 1;*/
+    /*}*/
+
+    /*PEM_read_bio_X509(bio, &cert, 0, NULL);*/
+
+    /*if (!cert) {*/
+        /*BGPSEC_DEBUG("Error loading key from bio");*/
+        /*return 1;*/
+    /*}*/
+
+    /*const ASN1_OCTET_STRING *ski = X509_get0_subject_key_id(cert);*/
 
     length = fread(&tmp_buff, sizeof(uint8_t), PRIV_KEY_BUFFER_SIZE, keyfile);
     fclose(keyfile);
@@ -1098,6 +1126,36 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     return 0;
 }
 
+static int chartob16(unsigned char hex_char)
+{
+    if (hex_char > 47 && hex_char < 58)
+        return hex_char - 48;
+
+    if (hex_char > 64 && hex_char < 71)
+        return hex_char - 55;
+        
+    if (hex_char > 96 && hex_char < 103)
+        return hex_char - 87;
+
+    return -1;
+}
+
+static int ski_char_to_hex(unsigned char *ski, uint8_t *buffer)
+{
+    char ch1;
+    char ch2;
+
+    for (int i = 0, j = 0; i < (SKI_STR_SIZE - 1); i += 2, j++) {
+        ch1 = chartob16(ski[i]);
+        ch2 = chartob16(ski[i+1]);
+        if (ch1 == -1 || ch2 == -1)
+            return (i + 1);
+        buffer[j] = (ch1 << 4) | ch2;
+    }
+
+    return 0;
+}
+
 struct private_key *bgpsec_private_key_new(void)
 {
     struct private_key *priv_key;
@@ -1106,6 +1164,9 @@ struct private_key *bgpsec_private_key_new(void)
 
     if (!priv_key)
         return NULL;
+
+    memset(priv_key->ski, 0, SKI_SIZE);
+    memset(priv_key->ski_str, 0, SKI_STR_SIZE);
 
     return priv_key;
 }
@@ -1240,6 +1301,48 @@ DEFUN (bgpsec_private_key,
     return CMD_SUCCESS;
 }
 
+DEFUN (bgpsec_private_key_ski,
+       bgpsec_private_key_ski_cmd,
+       "bgpsec privkey ski WORD",
+       BGPSEC_OUTPUT_STR
+       "Set the BGPsec private key\n"
+       "Set the SKI\n"
+       "The SKI\n")
+{
+    struct bgp *bgp;
+    int result;
+    int idx_path = 3;
+    int len;
+
+    bgp = bgp_get_default();
+    if (bgp) {
+        if (!bgp->priv_key) {
+            vty_out(vty, "No private key is set\n");
+            return CMD_WARNING_CONFIG_FAILED;
+        }
+
+        len = strlen(argv[idx_path]->arg);
+        if (len != 40) { // 20 * 2
+            vty_out(vty, "The SKI must be exactly 40 characters long (20 bytes)\n");
+            return CMD_WARNING_CONFIG_FAILED;
+        }
+
+        memcpy(bgp->priv_key->ski_str, argv[idx_path]->arg, SKI_STR_SIZE);
+        result = ski_char_to_hex(bgp->priv_key->ski_str, bgp->priv_key->ski);
+
+        if (result != 0) {
+            vty_out(vty, "Error: non-hex character found at position %d\n", result);
+            return CMD_WARNING_CONFIG_FAILED;
+        }
+
+        BGPSEC_DEBUG("Successfully set SKI %s", bgp->priv_key->ski_str);
+    } else {
+		vty_out(vty, "%% No BGP process is configured\n");
+        return CMD_WARNING;
+    }
+
+    return CMD_SUCCESS;
+}
 
 DEFUN (no_debug_bgpsec,
        no_debug_bgpsec_cmd,
@@ -1317,6 +1420,7 @@ static void install_cli_commands(void)
     overwrite_exit_commands();
 
     install_element(BGP_NODE, &bgpsec_private_key_cmd);
+    install_element(BGP_NODE, &bgpsec_private_key_ski_cmd);
 
 	/* Install debug commands */
 	install_element(CONFIG_NODE, &debug_bgpsec_cmd);

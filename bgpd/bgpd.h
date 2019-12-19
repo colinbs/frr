@@ -229,6 +229,8 @@ struct vpn_policy {
 	struct list *export_vrf;
 };
 
+#define SKI_STR_SIZE 41
+
 /*
  * A key struct that holds the private key for BGPsec signature.
  */
@@ -244,6 +246,9 @@ struct private_key {
 
 	/* Subject Key Identifier of the private BGPsec key */
 	uint8_t ski[SKI_SIZE];
+
+	/* Subject Key Identifier in human readable form */
+	unsigned char ski_str[SKI_STR_SIZE];
 
     /* A bool that tells if the key was successfully loaded. */
     bool loaded;
