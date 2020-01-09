@@ -2376,6 +2376,7 @@ void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec)
             bgpsec->sigblock1->sigsegs = NULL;
         }
         XFREE(MTYPE_BGP_BGPSEC_PATH, bgpsec->sigblock1);
+        bgpsec->sigblock1 = NULL;
     }
 
     if (bgpsec->sigblock2) {
@@ -2384,6 +2385,7 @@ void bgpsec_aspath_free(struct bgpsec_aspath *bgpsec)
             bgpsec->sigblock2->sigsegs = NULL;
         }
         XFREE(MTYPE_BGP_BGPSEC_PATH, bgpsec->sigblock2);
+        bgpsec->sigblock2 = NULL;
     }
 
     //TODO: str is not never allocated and the MEMTYPE is therefore not yet
@@ -2412,8 +2414,9 @@ struct bgpsec_sigseg *bgpsec_sigseg_new(void)
     struct bgpsec_sigseg *sigseg =
         XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));
     sigseg->next = NULL;
-    memset(sigseg->ski, 0, sizeof(struct bgpsec_sigseg));
+    sigseg->signature = NULL;
     sigseg->sig_len = 0;
+    memset(sigseg->ski, 0, SKI_SIZE);
     return sigseg;
 }
 
@@ -2432,34 +2435,38 @@ void bgpsec_secpath_free(struct bgpsec_secpath *secpath)
 {
     if (secpath)
         XFREE(MTYPE_BGP_BGPSEC_PATH, secpath);
+    secpath = NULL;
 }
 
 void bgpsec_secpath_free_all(struct bgpsec_secpath *secpath)
 {
-    struct bgpsec_secpath *tmp = NULL;
-
-    while (secpath) {
-        tmp = secpath;
-        secpath = secpath->next;
-        bgpsec_secpath_free(tmp);
+    if (!secpath)
+        return;
+    if (secpath->next) {
+        bgpsec_secpath_free_all(secpath->next);
+        secpath->next = NULL;
     }
+    bgpsec_secpath_free(secpath);
+    secpath = NULL;
 }
 
 void bgpsec_sigseg_free(struct bgpsec_sigseg *sigseg)
 {
-    if (sigseg && sigseg->signature)
+    if (sigseg && sigseg->signature) {
         XFREE(MTYPE_BGP_BGPSEC_PATH, sigseg->signature);
-    if (sigseg)
+        sigseg->signature = NULL;
+    }
+    if (sigseg) {
         XFREE(MTYPE_BGP_BGPSEC_PATH, sigseg);
+        sigseg = NULL;
+    }
 }
 
 void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg)
 {
-    struct bgpsec_sigseg *tmp = NULL;
-
-    while (sigseg) {
-        tmp = sigseg;
-        sigseg = sigseg->next;
-        bgpsec_sigseg_free(tmp);
-    }
+    if (!sigseg)
+        return;
+    if (sigseg->next)
+        bgpsec_sigseg_free_all(sigseg->next);
+    bgpsec_sigseg_free(sigseg);
 }
