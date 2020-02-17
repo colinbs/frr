@@ -232,4 +232,10 @@ extern void bgpsec_sigseg_free(struct bgpsec_sigseg *sigseg);
 
 extern void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg);
 
+extern struct bgpsec_aspath *copy_bgpsecpath(struct bgpsec_aspath *path);
+
+extern struct bgpsec_secpath *copy_secpath(struct bgpsec_secpath *secpath);
+
+extern struct bgpsec_sigseg *copy_sigseg(struct bgpsec_sigseg *sigseg);
+
 #endif /* _QUAGGA_BGP_ASPATH_H */

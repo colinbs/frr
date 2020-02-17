@@ -124,7 +124,8 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
                                          struct bgpsec_aspath *aspath,
                                          int *bgpsec_attrlen,
                                          struct bgpsec_secpath *own_secpath,
-                                         struct bgpsec_sigseg *own_sigseg);
+                                         struct bgpsec_sigseg *own_sigseg,
+                                         int sig_only);
 
 static int val_bgpsec_aspath(struct attr *attr,
                              struct peer *peer,
@@ -141,11 +142,15 @@ static int bgpsec_cleanup(struct bgp *bgp);
 static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
                                 struct rtr_bgpsec *data);
 
-struct bgpsec_aspath *copy_bgpsecpath(struct bgpsec_aspath *path);
-
 static int chartob16(unsigned char hex_char);
 
 static int ski_char_to_hex(unsigned char *ski, uint8_t *buffer);
+
+static void strip_sigseg(struct bgpsec_aspath *aspath);
+
+static void prepend_to_bgpsecpath(struct bgpsec_aspath *bgpsecpath,
+                                  struct bgpsec_secpath *own_secpath,
+                                  struct bgpsec_sigseg *own_sigseg);
 
 static int bgpsec_debug;
 
@@ -999,6 +1004,8 @@ static int build_bgpsec_aspath(struct bgp *bgp,
     int bgpsec_attrlen = 0;
 	size_t aspath_sizep;
     int rtval = 0;
+    int sig_only = 0;
+    int origin = 0;
 
     own_secpath = bgpsec_secpath_new();
     own_secpath->as = bgp->as;
@@ -1035,6 +1042,7 @@ static int build_bgpsec_aspath(struct bgp *bgp,
         bgpsecpath = copy_bgpsecpath(attr->bgpsecpath);
     } else {
         bgpsecpath = bgpsec_aspath_new();
+        origin = 1;
     }
 
     /* Create the signature before writing the BGPsec path to the stream.
@@ -1053,9 +1061,10 @@ static int build_bgpsec_aspath(struct bgp *bgp,
         stream_putc(s, BGP_ATTR_BGPSEC_PATH);
         aspath_sizep = stream_get_endp(s);
         stream_putw(s, 0);
+
         write_bgpsec_aspath_to_stream(s, bgpsecpath,
                                       &bgpsec_attrlen, own_secpath,
-                                      own_sigseg);
+                                      own_sigseg, sig_only);
         stream_putw_at(s, aspath_sizep, bgpsec_attrlen);
     } else {
         BGPSEC_DEBUG("Error generating signature");
@@ -1063,12 +1072,11 @@ static int build_bgpsec_aspath(struct bgp *bgp,
         return 1;
     }
 
-    if (!attr->bgpsecpath) {
-        attr->bgpsecpath = bgpsecpath;
-    } else {
-        bgpsec_aspath_free(bgpsecpath);
-        attr->bgpsecpath = NULL;
-    }
+    bgpsec_aspath_free(bgpsecpath);
+    bgpsecpath = NULL;
+
+    //TODO: not setting the peer->bgpsecpath will probably crash further
+    //down the line.
 
     return 0;
 }
@@ -1077,7 +1085,8 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
                                          struct bgpsec_aspath *aspath,
                                          int *length,
                                          struct bgpsec_secpath *own_secpath,
-                                         struct bgpsec_sigseg *own_sigseg)
+                                         struct bgpsec_sigseg *own_sigseg,
+                                         int sig_only)
 {
 	size_t aspath_sizep;
     struct bgpsec_sigblock *block = NULL;
@@ -1088,24 +1097,22 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     block = aspath->sigblock1;
     block->length = 0;
 
-    //TODO: origin or not?
     if (aspath->path_count == 0)
         origin = 1;
 
     /* Prepend own_secpath to the BGPsec path */
     if (origin) {
+        //TODO: alloc really necessary?
         block->sigsegs = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));
         aspath->secpaths = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_secpath));
     } else {
-        //TODO: own_secpath->next pointer needs to be allocated.
         own_secpath->next = aspath->secpaths;
         own_sigseg->next = block->sigsegs;
     }
 
-    /* Prepend own_sigseg to the signature segments */
     aspath->secpaths = own_secpath;
-    block->sigsegs = own_sigseg;
     aspath->path_count++;
+    block->sigsegs = own_sigseg;
     block->sig_count++;
 
     stream_putw(s, (aspath->path_count * BGPSEC_SECURE_PATH_SEGMENT_SIZE) + 2);
@@ -1148,22 +1155,18 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     return 0;
 }
 
-struct bgpsec_aspath *copy_bgpsecpath(struct bgpsec_aspath *path)
+static void prepend_to_bgpsecpath(struct bgpsec_aspath *path,
+                                  struct bgpsec_secpath *own_secpath,
+                                  struct bgpsec_sigseg *own_sigseg)
 {
-    struct bgpsec_aspath *new_path;
+    if (!path || !own_secpath || !own_sigseg)
+        return;
 
-    if (!path)
-        return NULL;
+    own_secpath->next = path->secpaths;
+    path->secpaths = own_secpath;
 
-    new_path = bgpsec_aspath_new();
-
-    if (!new_path)
-        return NULL;
-    
-    new_path->refcnt = path->refcnt;
-    //TODO: write copy functions!
-
-    return new_path;
+    own_sigseg->next = path->sigblock1->sigsegs;
+    path->sigblock1->sigsegs = own_sigseg;
 }
 
 static int chartob16(unsigned char hex_char)
@@ -1194,6 +1197,19 @@ static int ski_char_to_hex(unsigned char *ski, uint8_t *buffer)
     }
 
     return 0;
+}
+
+static void strip_sigseg(struct bgpsec_aspath *aspath)
+{
+    struct bgpsec_sigseg *tmp;
+
+    if (!aspath || !aspath->sigblock1 || !aspath->sigblock1->sigsegs)
+        return;
+
+    tmp = aspath->sigblock1->sigsegs;
+    aspath->sigblock1->sigsegs = tmp->next;
+    aspath->sigblock1->sig_count--;
+    bgpsec_sigseg_free(tmp);
 }
 
 struct private_key *bgpsec_private_key_new(void)

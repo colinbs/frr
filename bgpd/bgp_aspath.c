@@ -2470,3 +2470,77 @@ void bgpsec_sigseg_free_all(struct bgpsec_sigseg *sigseg)
         bgpsec_sigseg_free_all(sigseg->next);
     bgpsec_sigseg_free(sigseg);
 }
+
+struct bgpsec_aspath *copy_bgpsecpath(struct bgpsec_aspath *path)
+{
+    struct bgpsec_aspath *new_path;
+
+    if (!path)
+        return NULL;
+
+    new_path = bgpsec_aspath_new();
+
+    if (!new_path)
+        return NULL;
+    
+    new_path->refcnt = path->refcnt;
+
+    // copying sigblock1 should do the trick for now.
+    new_path->sigblock1 = bgpsec_sigblock_new();
+    new_path->sigblock1->length = path->sigblock1->length;
+    new_path->sigblock1->alg = path->sigblock1->alg;
+    new_path->sigblock1->sig_count = path->sigblock1->sig_count;
+    new_path->sigblock1->sigsegs = copy_sigseg(path->sigblock1->sigsegs);
+
+    new_path->secpaths = copy_secpath(path->secpaths);
+    new_path->path_count = path->path_count;
+
+    return new_path;
+}
+
+struct bgpsec_secpath *copy_secpath(struct bgpsec_secpath *secpath)
+{
+    struct bgpsec_secpath *new;
+
+    if (!secpath)
+        return NULL;
+
+    new = bgpsec_secpath_new();
+
+    if (!new)
+        return NULL;
+
+    new->pcount = secpath->pcount;
+    new->flags = secpath->flags;
+    new->as = secpath->as;
+
+    new->next = copy_secpath(secpath->next);
+
+    return new;
+}
+
+struct bgpsec_sigseg *copy_sigseg(struct bgpsec_sigseg *sigseg)
+{
+    struct bgpsec_sigseg *new;
+
+    if (!sigseg)
+        return NULL;
+
+    new = bgpsec_sigseg_new();
+
+    if (!new)
+        return NULL;
+
+    new->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sigseg->sig_len);
+
+    if (!new->signature)
+        return NULL;
+
+    memcpy(new->ski, sigseg->ski, SKI_SIZE);
+    new->sig_len = sigseg->sig_len;
+    memcpy(new->signature, sigseg->signature, sigseg->sig_len);
+
+    new->next = copy_sigseg(sigseg->next);
+
+    return new;
+}
