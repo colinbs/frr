@@ -3218,6 +3218,7 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
              * AS_PATH reconstruction.
              */
             //TODO: differentiate between, valid, invalid and error.
+            // For now, always continue to use bgpsec.
             if (ret == 0) {
                 attr->aspath = bgpsec_aspath_parse(attr);
                 attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_AS_PATH);
@@ -3225,6 +3226,11 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
             } else {
                 //TODO: AS_PATH reconstruction. Remember to set the
                 //BGP_ATTR_AS_PATH flag.
+                //DELETE---
+                attr->aspath = bgpsec_aspath_parse(attr);
+                attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_AS_PATH);
+                use_bgpsec = 1;
+                ///---DELETE
             }
         }
     }
