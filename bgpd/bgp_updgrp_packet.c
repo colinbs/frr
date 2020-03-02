@@ -704,6 +704,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 	struct prefix_rd *prd = NULL;
 	mpls_label_t label = MPLS_INVALID_LABEL, *label_pnt = NULL;
 	uint32_t num_labels = 0;
+    int use_bgpsec = 1;
 
 	if (!subgrp)
 		return NULL;
@@ -896,11 +897,13 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 				   pfx_buf);
 		}
 
-		/* Synchnorize attribute.  */
-		if (adj->attr)
-			bgp_attr_unintern(&adj->attr);
-		else
-			subgrp->scount++;
+        /* If bgpsec is not used, don't sync the attribute */
+        if (!use_bgpsec) {
+            /* Synchnorize attribute.  */
+            if (adj->attr)
+                bgp_attr_unintern(&adj->attr);
+            else
+                subgrp->scount++;
 
 		adj->attr = bgp_attr_intern(adv->baa->attr);
 next:
