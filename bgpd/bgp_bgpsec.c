@@ -152,6 +152,10 @@ static void prepend_to_bgpsecpath(struct bgpsec_aspath *bgpsecpath,
                                   struct bgpsec_secpath *own_secpath,
                                   struct bgpsec_sigseg *own_sigseg);
 
+struct bgpsec_secpath *reverse_secpath_order(struct bgpsec_secpath *secpath);
+
+struct bgpsec_sigseg *reverse_sigseg_order(struct bgpsec_sigseg *sigsegs);
+
 static int bgpsec_debug;
 
 static struct rtr_mgr_config *rtr_config;
@@ -514,11 +518,9 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 		curr_path->as = stream_getl(peer->curr);
 
 		if (prev_path) {
-			curr_path->next = bgpsecpath->secpaths;
-            bgpsecpath->secpaths = curr_path;
+            prev_path->next = curr_path;
 		} else {
-			/* If it is the head segment, add the head to the BGPsec_PATH */
-			bgpsecpath->secpaths = curr_path;
+            bgpsecpath->secpaths = curr_path;
 		}
 
 		remain_len -= 6;
@@ -541,8 +543,7 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 		curr_sig_path = bgpsec_sigseg_new();
 
 		if (prev_sig_path) {
-			curr_sig_path->next = sigblock1->sigsegs;
-            sigblock1->sigsegs = curr_sig_path;
+            prev_sig_path->next = curr_sig_path;
 		} else {
 			/* If it is the head segment, add the head to the BGPsec_PATH */
 			sigblock1->sigsegs = curr_sig_path;
@@ -1117,7 +1118,11 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
 
     stream_putw(s, (aspath->path_count * BGPSEC_SECURE_PATH_SEGMENT_SIZE) + 2);
 
-    /* Put in all secure path segments */
+    /* Then, put in the rest of the secure path segments.
+     * Since they are in the following order: AS1 AS2 AS3
+     * they need to be reversed first, so the origin AS1 is
+     * written last.
+     */
     sec = aspath->secpaths;
     while (sec) {
         stream_putc(s, sec->pcount);
@@ -1137,7 +1142,10 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     /* The length field + algo id */
     block->length += 3;
 
-    /* Put in all signature segments */
+    /* Then, put in the rest of the signature segments.
+     * Write them in reverse order, just like we did with
+     * the secure path segments.
+     */
     sig = block->sigsegs;
     while (sig) {
         stream_put(s, sig->ski, SKI_LENGTH);
@@ -1152,7 +1160,54 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     *length += block->length;
     memcpy(aspath->sigblock1, block, sizeof(struct bgpsec_sigblock));
 
+    aspath->secpaths = own_secpath;
+    block->sigsegs = own_sigseg;
+
     return 0;
+}
+
+struct bgpsec_secpath *reverse_secpath_order(struct bgpsec_secpath *secpath)
+{
+    struct bgpsec_secpath *copy = NULL;
+    struct bgpsec_secpath *prev = NULL;
+    struct bgpsec_secpath *next = NULL;
+
+    if (!secpath)
+        return NULL;
+
+    copy = copy_secpath(secpath);
+
+    while (copy) {
+        next = copy->next;
+        copy->next = prev;
+
+        prev = copy;
+        copy = next;
+    }
+
+    return prev;
+}
+
+struct bgpsec_sigseg *reverse_sigseg_order(struct bgpsec_sigseg *sigsegs)
+{
+    struct bgpsec_sigseg *copy = NULL;
+    struct bgpsec_sigseg *prev = NULL;
+    struct bgpsec_sigseg *next = NULL;
+
+    if (!sigsegs)
+        return NULL;
+
+    copy = copy_sigseg(sigsegs);
+
+    while (copy) {
+        next = copy->next;
+        copy->next = prev;
+
+        prev = copy;
+        copy = next;
+    }
+
+    return prev;
 }
 
 static void prepend_to_bgpsecpath(struct bgpsec_aspath *path,
