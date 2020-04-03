@@ -332,6 +332,143 @@ static void test_bgpsec_copy_bgpsecpath()
     bgpsec_aspath_free(copy);
 }
 
+static void test_bgpsec_reverse_order()
+{
+    struct bgpsec_aspath *path = bgpsec_aspath_new();
+
+    struct bgpsec_sigseg *first_sig = bgpsec_sigseg_new();
+    struct bgpsec_sigseg *second_sig = bgpsec_sigseg_new();
+    struct bgpsec_sigseg *third_sig = bgpsec_sigseg_new();
+
+    struct bgpsec_sigseg *sig_reversed = NULL;
+    struct bgpsec_sigseg *sig_normal = NULL;
+
+    struct bgpsec_secpath *first_sec = bgpsec_secpath_new();
+    struct bgpsec_secpath *second_sec = bgpsec_secpath_new();
+    struct bgpsec_secpath *third_sec = bgpsec_secpath_new();
+
+    struct bgpsec_secpath *sec_reversed = NULL;
+    struct bgpsec_secpath *sec_normal = NULL;
+
+    path->sigblock1 = bgpsec_sigblock_new();
+
+    path->sigblock1->sigsegs = first_sig;
+    path->secpaths = first_sec;
+
+    path->sigblock1->length = 100;
+    path->sigblock1->alg = 1;
+    path->sigblock1->sig_count = 3;
+
+    path->path_count = 3;
+
+    first_sig->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH, 5);
+    second_sig->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH, 5);
+    third_sig->signature = XMALLOC(MTYPE_BGP_BGPSEC_PATH, 5);
+
+    memcpy(first_sig->ski, ski1, SKI_SIZE);
+    first_sig->sig_len = 5;
+    memcpy(first_sig->signature, sig1, 5);
+    first_sig->next = second_sig;
+
+    memcpy(second_sig->ski, ski2, SKI_SIZE);
+    second_sig->sig_len = 5;
+    memcpy(second_sig->signature, sig2, 5);
+    second_sig->next = third_sig;
+
+    memcpy(third_sig->ski, ski3, SKI_SIZE);
+    third_sig->sig_len = 5;
+    memcpy(third_sig->signature, sig3, 5);
+    third_sig->next = NULL;
+
+    first_sec->pcount = 1;
+    first_sec->flags = 1;
+    first_sec->as = 111;
+    first_sec->next = second_sec;
+
+    second_sec->pcount = 2;
+    second_sec->flags = 2;
+    second_sec->as = 222;
+    second_sec->next = third_sec;
+
+    third_sec->pcount = 3;
+    third_sec->flags = 3;
+    third_sec->as = 333;
+    third_sec->next = NULL;
+
+    sig_reversed = reverse_sigseg_order(first_sig);
+
+    assert(sig_reversed->ski[0] == 0xCD);
+    assert(sig_reversed->ski[19] == 0x68);
+    assert(sig_reversed->sig_len == 5);
+    assert(sig_reversed->signature[0] == 0xBC);
+    assert(sig_reversed->signature[4] == 0xF0);
+
+    assert(sig_reversed->next->ski[0] == 0xAB);
+    assert(sig_reversed->next->ski[19] == 0x54);
+    assert(sig_reversed->next->sig_len == 5);
+    assert(sig_reversed->next->signature[0] == 0x67);
+    assert(sig_reversed->next->signature[4] == 0xA0);
+
+    assert(sig_reversed->next->next->ski[0] == 0x47);
+    assert(sig_reversed->next->next->ski[19] == 0xEC);
+    assert(sig_reversed->next->next->sig_len == 5);
+    assert(sig_reversed->next->next->signature[0] == 0x12);
+    assert(sig_reversed->next->next->signature[4] == 0x56);
+
+    sig_normal = reverse_sigseg_order(sig_reversed);
+
+    assert(sig_normal->ski[0] == 0x47);
+    assert(sig_normal->ski[19] == 0xEC);
+    assert(sig_normal->sig_len == 5);
+    assert(sig_normal->signature[0] == 0x12);
+    assert(sig_normal->signature[4] == 0x56);
+
+    assert(sig_normal->next->ski[0] == 0xAB);
+    assert(sig_normal->next->ski[19] == 0x54);
+    assert(sig_normal->next->sig_len == 5);
+    assert(sig_normal->next->signature[0] == 0x67);
+    assert(sig_normal->next->signature[4] == 0xA0);
+
+    assert(sig_normal->next->next->ski[0] == 0xCD);
+    assert(sig_normal->next->next->ski[19] == 0x68);
+    assert(sig_normal->next->next->sig_len == 5);
+    assert(sig_normal->next->next->signature[0] == 0xBC);
+    assert(sig_normal->next->next->signature[4] == 0xF0);
+
+    sec_reversed = reverse_secpath_order(first_sec);
+
+    assert(sec_reversed->pcount == 3);
+    assert(sec_reversed->flags == 3);
+    assert(sec_reversed->as == 333);
+
+    assert(sec_reversed->next->pcount == 2);
+    assert(sec_reversed->next->flags == 2);
+    assert(sec_reversed->next->as == 222);
+
+    assert(sec_reversed->next->next->pcount == 1);
+    assert(sec_reversed->next->next->flags == 1);
+    assert(sec_reversed->next->next->as == 111);
+
+    sec_normal = reverse_secpath_order(sec_reversed);
+
+    assert(sec_normal->pcount == 1);
+    assert(sec_normal->flags == 1);
+    assert(sec_normal->as == 111);
+
+    assert(sec_normal->next->pcount == 2);
+    assert(sec_normal->next->flags == 2);
+    assert(sec_normal->next->as == 222);
+
+    assert(sec_normal->next->next->pcount == 3);
+    assert(sec_normal->next->next->flags == 3);
+    assert(sec_normal->next->next->as == 333);
+
+    bgpsec_sigseg_free_all(sig_reversed);
+    bgpsec_sigseg_free_all(sig_normal);
+    bgpsec_secpath_free_all(sec_reversed);
+    bgpsec_secpath_free_all(sec_normal);
+}
+
 int main(int argc, char *argv[])
 {
     test_bgpsec_aspath();
@@ -341,4 +478,5 @@ int main(int argc, char *argv[])
     test_bgpsec_copy_secpath();
     test_bgpsec_copy_sigseg();
     test_bgpsec_copy_bgpsecpath();
+    test_bgpsec_reverse_order();
 }
