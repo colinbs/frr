@@ -2544,3 +2544,47 @@ struct bgpsec_sigseg *copy_sigseg(struct bgpsec_sigseg *sigseg)
 
     return new;
 }
+
+struct bgpsec_secpath *reverse_secpath_order(struct bgpsec_secpath *secpath)
+{
+    struct bgpsec_secpath *copy = NULL;
+    struct bgpsec_secpath *prev = NULL;
+    struct bgpsec_secpath *next = NULL;
+
+    if (!secpath)
+        return NULL;
+
+    copy = copy_secpath(secpath);
+
+    while (copy) {
+        next = copy->next;
+        copy->next = prev;
+
+        prev = copy;
+        copy = next;
+    }
+
+    return prev;
+}
+
+struct bgpsec_sigseg *reverse_sigseg_order(struct bgpsec_sigseg *sigsegs)
+{
+    struct bgpsec_sigseg *copy = NULL;
+    struct bgpsec_sigseg *prev = NULL;
+    struct bgpsec_sigseg *next = NULL;
+
+    if (!sigsegs)
+        return NULL;
+
+    copy = copy_sigseg(sigsegs);
+
+    while (copy) {
+        next = copy->next;
+        copy->next = prev;
+
+        prev = copy;
+        copy = next;
+    }
+
+    return prev;
+}

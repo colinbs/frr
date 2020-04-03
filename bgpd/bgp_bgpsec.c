@@ -152,10 +152,6 @@ static void prepend_to_bgpsecpath(struct bgpsec_aspath *bgpsecpath,
                                   struct bgpsec_secpath *own_secpath,
                                   struct bgpsec_sigseg *own_sigseg);
 
-struct bgpsec_secpath *reverse_secpath_order(struct bgpsec_secpath *secpath);
-
-struct bgpsec_sigseg *reverse_sigseg_order(struct bgpsec_sigseg *sigsegs);
-
 static int bgpsec_debug;
 
 static struct rtr_mgr_config *rtr_config;
@@ -1092,7 +1088,9 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
 	size_t aspath_sizep;
     struct bgpsec_sigblock *block = NULL;
     struct bgpsec_secpath *sec = NULL;
+    struct bgpsec_secpath *sec_start_p = NULL;
     struct bgpsec_sigseg *sig = NULL;
+    struct bgpsec_sigseg *sig_start_p = NULL;
     int origin = 0;
 
     block = aspath->sigblock1;
@@ -1123,7 +1121,8 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
      * they need to be reversed first, so the origin AS1 is
      * written last.
      */
-    sec = aspath->secpaths;
+    sec = reverse_secpath_order(aspath->secpaths);
+    sec_start_p = sec;
     while (sec) {
         stream_putc(s, sec->pcount);
         stream_putc(s, sec->flags);
@@ -1146,7 +1145,8 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
      * Write them in reverse order, just like we did with
      * the secure path segments.
      */
-    sig = block->sigsegs;
+    sig = reverse_sigseg_order(block->sigsegs);
+    sig_start_p = sig;
     while (sig) {
         stream_put(s, sig->ski, SKI_LENGTH);
         stream_putw(s, sig->sig_len);
@@ -1163,51 +1163,13 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     aspath->secpaths = own_secpath;
     block->sigsegs = own_sigseg;
 
+    /* Free temp structs */
+    if (sec_start_p)
+        bgpsec_secpath_free_all(sec_start_p);
+    if (sig_start_p)
+        bgpsec_sigseg_free_all(sig_start_p);
+
     return 0;
-}
-
-struct bgpsec_secpath *reverse_secpath_order(struct bgpsec_secpath *secpath)
-{
-    struct bgpsec_secpath *copy = NULL;
-    struct bgpsec_secpath *prev = NULL;
-    struct bgpsec_secpath *next = NULL;
-
-    if (!secpath)
-        return NULL;
-
-    copy = copy_secpath(secpath);
-
-    while (copy) {
-        next = copy->next;
-        copy->next = prev;
-
-        prev = copy;
-        copy = next;
-    }
-
-    return prev;
-}
-
-struct bgpsec_sigseg *reverse_sigseg_order(struct bgpsec_sigseg *sigsegs)
-{
-    struct bgpsec_sigseg *copy = NULL;
-    struct bgpsec_sigseg *prev = NULL;
-    struct bgpsec_sigseg *next = NULL;
-
-    if (!sigsegs)
-        return NULL;
-
-    copy = copy_sigseg(sigsegs);
-
-    while (copy) {
-        next = copy->next;
-        copy->next = prev;
-
-        prev = copy;
-        copy = next;
-    }
-
-    return prev;
 }
 
 static void prepend_to_bgpsecpath(struct bgpsec_aspath *path,

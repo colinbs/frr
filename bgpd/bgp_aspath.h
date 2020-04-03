@@ -238,4 +238,10 @@ extern struct bgpsec_secpath *copy_secpath(struct bgpsec_secpath *secpath);
 
 extern struct bgpsec_sigseg *copy_sigseg(struct bgpsec_sigseg *sigseg);
 
+extern struct bgpsec_secpath *reverse_secpath_order(
+                                        struct bgpsec_secpath *secpath);
+
+extern struct bgpsec_sigseg *reverse_sigseg_order(
+                                        struct bgpsec_sigseg *sigsegs);
+
 #endif /* _QUAGGA_BGP_ASPATH_H */
