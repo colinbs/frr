@@ -897,13 +897,11 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 				   pfx_buf);
 		}
 
-        /* If bgpsec is not used, don't sync the attribute */
-        if (!use_bgpsec) {
-            /* Synchnorize attribute.  */
-            if (adj->attr)
-                bgp_attr_unintern(&adj->attr);
-            else
-                subgrp->scount++;
+        /* Synchnorize attribute.  */
+        if (adj->attr)
+            bgp_attr_unintern(&adj->attr);
+        else
+            subgrp->scount++;
 
 		adj->attr = bgp_attr_intern(adv->baa->attr);
 next:

@@ -334,7 +334,8 @@ extern bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *,
 				       struct bpacket_attr_vec_arr *vecarr,
 				       struct prefix *, afi_t, safi_t,
 				       struct peer *, struct prefix_rd *,
-				       mpls_label_t *, uint32_t, int, uint32_t);
+				       mpls_label_t *, uint32_t, int, uint32_t,
+                       struct prefix *bgpsec_p);
 extern void bgp_dump_routes_attr(struct stream *s, struct attr *attr,
 				 const struct prefix *p);
 extern bool attrhash_cmp(const void *arg1, const void *arg2);

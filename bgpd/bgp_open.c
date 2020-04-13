@@ -1596,43 +1596,6 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 	// BGPsecHook to write capabilities.
 	hook_call(bgp_put_bgpsec_cap, s, peer);
 
-	/* Sending base graceful-restart capability irrespective of the config
-	 */
-	SET_FLAG(peer->cap, PEER_CAP_RESTART_ADV);
-	stream_putc(s, BGP_OPEN_OPT_CAP);
-	capp = stream_get_endp(s); /* Set Capability Len Pointer */
-	stream_putc(s, 0);	 /* Capability Length */
-	stream_putc(s, CAPABILITY_CODE_RESTART);
-	rcapp = stream_get_endp(s); /* Set Restart Capability Len Pointer */
-	stream_putc(s, 0);
-	restart_time = peer->bgp->restart_time;
-	if (peer->bgp->t_startup) {
-		SET_FLAG(restart_time, RESTART_R_BIT);
-		SET_FLAG(peer->cap, PEER_CAP_RESTART_BIT_ADV);
-	}
-	stream_putw(s, restart_time);
-
-	/* Send address-family specific graceful-restart capability only when GR
-	   config
-	   is present */
-	if (bgp_flag_check(peer->bgp, BGP_FLAG_GRACEFUL_RESTART)) {
-		FOREACH_AFI_SAFI (afi, safi) {
-			if (peer->afc[afi][safi]) {
-				/* Convert AFI, SAFI to values for
-				 * packet. */
-				bgp_map_afi_safi_int2iana(afi, safi, &pkt_afi,
-							  &pkt_safi);
-				stream_putw(s, pkt_afi);
-				stream_putc(s, pkt_safi);
-				if (bgp_flag_check(peer->bgp,
-						   BGP_FLAG_GR_PRESERVE_FWD))
-					stream_putc(s, RESTART_F_BIT);
-				else
-					stream_putc(s, 0);
-			}
-		}
-	}
-
 	bgp_peer_send_gr_capability(s, peer, cp);
 
 	/* Total Opt Parm Len. */
