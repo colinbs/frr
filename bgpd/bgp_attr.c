@@ -3199,16 +3199,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	}
 
 	/* Check all mandatory well-known attributes are present */
-<<<<<<< HEAD
 	if ((ret = bgp_attr_check(peer, attr)) < 0)
 		goto done;
-=======
-	if ((ret = bgp_attr_check(peer, attr)) < 0) {
-		if (as4_path)
-			aspath_unintern(&as4_path);
-		return ret;
-	}
->>>>>>> 51f472d77... bgpsec: fix NEXT_HOP not being set properly.
 
     /* Append the prefix information to the BGPsec AS path */
     if (attr->bgpsecpath) {
