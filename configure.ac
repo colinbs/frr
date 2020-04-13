@@ -1865,6 +1865,7 @@ case "$host_os" in
     enable_vrrpd="no"
     ;;
 esac
+fi
 
 dnl ------------------------------------
 dnl Enable BGPsec and add librtr to libs
