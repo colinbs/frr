@@ -152,6 +152,10 @@ static void prepend_to_bgpsecpath(struct bgpsec_aspath *bgpsecpath,
                                   struct bgpsec_secpath *own_secpath,
                                   struct bgpsec_sigseg *own_sigseg);
 
+static void append_to_bgpsecpath(struct bgpsec_aspath *path,
+                                  struct bgpsec_secpath *own_secpath,
+                                  struct bgpsec_sigseg *own_sigseg);
+
 static int bgpsec_debug;
 
 static struct rtr_mgr_config *rtr_config;
@@ -836,6 +840,7 @@ static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
     struct bgpsec_sigseg *nextsig;
     int result;
 
+    //TODO: Don't prepend, append instead.
     nextsec = bgpsecpath->secpaths;
     while (nextsec) {
         sec = rtr_mgr_bgpsec_new_secure_path_seg(nextsec->pcount,
@@ -844,7 +849,7 @@ static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
         if (!sec)
             return 1;
 
-        rtr_mgr_bgpsec_prepend_sec_path_seg(data, sec);
+        rtr_mgr_bgpsec_append_sec_path_seg(data, sec);
         nextsec = nextsec->next;
     }
 
@@ -856,7 +861,7 @@ static int copy_rtr_data_to_frr(struct bgpsec_aspath *bgpsecpath,
         if (!sig)
             return 1;
 
-        result = rtr_mgr_bgpsec_prepend_sig_seg(data, sig);
+        result = rtr_mgr_bgpsec_append_sig_seg(data, sig);
 
         if (result == RTR_BGPSEC_ERROR) {
             BGPSEC_DEBUG("Error, signature cound not be prepended to bgpsec data");
@@ -1062,6 +1067,7 @@ static int build_bgpsec_aspath(struct bgp *bgp,
         write_bgpsec_aspath_to_stream(s, bgpsecpath,
                                       &bgpsec_attrlen, own_secpath,
                                       own_sigseg, sig_only);
+
         stream_putw_at(s, aspath_sizep, bgpsec_attrlen);
     } else {
         BGPSEC_DEBUG("Error generating signature");
@@ -1102,27 +1108,33 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     /* Prepend own_secpath to the BGPsec path */
     if (origin) {
         //TODO: alloc really necessary?
-        block->sigsegs = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));
-        aspath->secpaths = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_secpath));
+        /*block->sigsegs = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_sigseg));*/
+        /*aspath->secpaths = XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_secpath));*/
     } else {
-        own_secpath->next = aspath->secpaths;
-        own_sigseg->next = block->sigsegs;
+        /*own_secpath->next = aspath->secpaths;*/
+        /*own_sigseg->next = block->sigsegs;*/
     }
 
-    aspath->secpaths = own_secpath;
-    aspath->path_count++;
-    block->sigsegs = own_sigseg;
-    block->sig_count++;
+    /*aspath->secpaths = own_secpath;*/
+    /*aspath->path_count++;*/
+    /*block->sigsegs = own_sigseg;*/
+    /*block->sig_count++;*/
 
-    stream_putw(s, (aspath->path_count * BGPSEC_SECURE_PATH_SEGMENT_SIZE) + 2);
+    stream_putw(s, ((aspath->path_count + 1) * BGPSEC_SECURE_PATH_SEGMENT_SIZE) + 2);
+
+    /* First put in the secure path segment of the own AS */
+    stream_putc(s, own_secpath->pcount);
+    stream_putc(s, own_secpath->flags);
+    stream_putl(s, own_secpath->as);
 
     /* Then, put in the rest of the secure path segments.
      * Since they are in the following order: AS1 AS2 AS3
      * they need to be reversed first, so the origin AS1 is
      * written last.
      */
-    sec = reverse_secpath_order(aspath->secpaths);
-    sec_start_p = sec;
+    /*sec = reverse_secpath_order(aspath->secpaths);*/
+    /*sec_start_p = sec;*/
+    sec = aspath->secpaths;
     while (sec) {
         stream_putc(s, sec->pcount);
         stream_putc(s, sec->flags);
@@ -1131,7 +1143,7 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
         sec = sec->next;
     }
 
-    *length += (aspath->path_count * BGPSEC_SECURE_PATH_SEGMENT_SIZE) + 2;
+    *length += ((aspath->path_count + 1) * BGPSEC_SECURE_PATH_SEGMENT_SIZE) + 2;
 
     /* Put in block length and algorithm ID */
     aspath_sizep = stream_get_endp(s);
@@ -1141,12 +1153,19 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     /* The length field + algo id */
     block->length += 3;
 
+    /* First, put in the signature segment of the own AS */
+    stream_put(s, own_sigseg->ski, SKI_LENGTH);
+    stream_putw(s, own_sigseg->sig_len);
+    stream_put(s, own_sigseg->signature, own_sigseg->sig_len);
+    block->length += SKI_LENGTH + own_sigseg->sig_len + sizeof(own_sigseg->sig_len);
+
     /* Then, put in the rest of the signature segments.
      * Write them in reverse order, just like we did with
      * the secure path segments.
      */
-    sig = reverse_sigseg_order(block->sigsegs);
-    sig_start_p = sig;
+    /*sig = reverse_sigseg_order(block->sigsegs);*/
+    /*sig_start_p = sig;*/
+    sig = block->sigsegs;
     while (sig) {
         stream_put(s, sig->ski, SKI_LENGTH);
         stream_putw(s, sig->sig_len);
@@ -1160,14 +1179,14 @@ static int write_bgpsec_aspath_to_stream(struct stream *s,
     *length += block->length;
     memcpy(aspath->sigblock1, block, sizeof(struct bgpsec_sigblock));
 
-    aspath->secpaths = own_secpath;
-    block->sigsegs = own_sigseg;
+    /*aspath->secpaths = own_secpath;*/
+    /*block->sigsegs = own_sigseg;*/
 
     /* Free temp structs */
-    if (sec_start_p)
-        bgpsec_secpath_free_all(sec_start_p);
-    if (sig_start_p)
-        bgpsec_sigseg_free_all(sig_start_p);
+    /*if (sec_start_p)*/
+        /*bgpsec_secpath_free_all(sec_start_p);*/
+    /*if (sig_start_p)*/
+        /*bgpsec_sigseg_free_all(sig_start_p);*/
 
     return 0;
 }
@@ -1184,6 +1203,49 @@ static void prepend_to_bgpsecpath(struct bgpsec_aspath *path,
 
     own_sigseg->next = path->sigblock1->sigsegs;
     path->sigblock1->sigsegs = own_sigseg;
+}
+
+static void append_to_bgpsecpath(struct bgpsec_aspath *path,
+                                 struct bgpsec_secpath *own_secpath,
+                                 struct bgpsec_sigseg *own_sigseg)
+{
+    struct bgpsec_secpath *next_sec = NULL;
+    struct bgpsec_secpath *last_sec = NULL;
+    struct bgpsec_sigseg *next_sig = NULL;
+    struct bgpsec_sigseg *last_sig = NULL;
+
+    if (!path || !own_secpath || !own_sigseg)
+        return;
+
+    next_sec = path->secpaths;
+    next_sig = path->sigblock1->sigsegs;
+
+    while (next_sec) {
+        last_sec = next_sec;
+        next_sec = next_sec->next;
+    }
+
+    if (last_sec) {
+        last_sec->next = own_secpath;
+    } else {
+        path->secpaths = own_secpath;
+    }
+
+    path->path_count++;
+
+    while (next_sig) {
+        last_sig = next_sig;
+        next_sig = next_sig->next;
+    }
+
+    if (last_sig) {
+        last_sig->next = own_sigseg;
+    } else {
+        path->sigblock1->sigsegs = own_sigseg;
+    }
+
+    path->sigblock1->sig_count++;
+
 }
 
 static int chartob16(unsigned char hex_char)
