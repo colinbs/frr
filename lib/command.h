@@ -165,6 +165,7 @@ enum node_type {
 	BGP_EVPN_VNI_NODE,       /* BGP EVPN VNI */
 	RPKI_NODE,     /* RPKI node for configuration of RPKI cache server
 			  connections.*/
+    BGPSEC_NODE,    /* BGPsec node for AS path validation. */
 	BGP_FLOWSPECV4_NODE,	/* BGP IPv4 FLOWSPEC Address-Family */
 	BGP_FLOWSPECV6_NODE,	/* BGP IPv6 FLOWSPEC Address-Family */
 	BFD_NODE,		 /* BFD protocol mode. */
@@ -438,6 +439,7 @@ struct cmd_node {
 #define BFD_PROFILE_STR "BFD profile.\n"
 #define BFD_PROFILE_NAME_STR "BFD profile name.\n"
 #define SHARP_STR "Sharp Routing Protocol\n"
+#define BGPSEC_STR "BGPsec information\n"
 
 #define CMD_VNI_RANGE "(1-16777215)"
 #define CONF_BACKUP_EXT ".sav"
