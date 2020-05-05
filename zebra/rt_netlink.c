@@ -1552,7 +1552,8 @@ static void netlink_route_nexthop_encap(struct nlmsghdr *n, size_t nlen,
  * Routing table change via netlink interface, using a dataplane context object
  */
 ssize_t netlink_route_multipath(int cmd, struct zebra_dplane_ctx *ctx,
-				uint8_t *data, size_t datalen, bool fpm)
+				uint8_t *data, size_t datalen, bool fpm,
+				bool force_nhg)
 {
 	int bytelen;
 	struct nexthop *nexthop = NULL;
@@ -1674,7 +1675,7 @@ ssize_t netlink_route_multipath(int cmd, struct zebra_dplane_ctx *ctx,
 			  RTA_PAYLOAD(rta));
 	}
 
-	if (kernel_nexthops_supported()) {
+	if (kernel_nexthops_supported() || force_nhg) {
 		/* Kernel supports nexthop objects */
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
@@ -2197,7 +2198,7 @@ enum zebra_dplane_result kernel_route_update(struct zebra_dplane_ctx *ctx)
 			    !RSYSTEM_ROUTE(dplane_ctx_get_old_type(ctx))) {
 				netlink_route_multipath(RTM_DELROUTE, ctx,
 							nl_pkt, sizeof(nl_pkt),
-							false);
+							false, false);
 				netlink_talk_info(netlink_talk_filter,
 						  (struct nlmsghdr *)nl_pkt,
 						  dplane_ctx_get_ns(ctx), 0);
@@ -2218,7 +2219,7 @@ enum zebra_dplane_result kernel_route_update(struct zebra_dplane_ctx *ctx)
 			if (!RSYSTEM_ROUTE(dplane_ctx_get_old_type(ctx))) {
 				netlink_route_multipath(RTM_DELROUTE, ctx,
 							nl_pkt, sizeof(nl_pkt),
-							false);
+							false, false);
 				netlink_talk_info(netlink_talk_filter,
 						  (struct nlmsghdr *)nl_pkt,
 						  dplane_ctx_get_ns(ctx), 0);
@@ -2232,7 +2233,7 @@ enum zebra_dplane_result kernel_route_update(struct zebra_dplane_ctx *ctx)
 
 	if (!RSYSTEM_ROUTE(dplane_ctx_get_type(ctx))) {
 		netlink_route_multipath(cmd, ctx, nl_pkt, sizeof(nl_pkt),
-					false);
+					false, false);
 		ret = netlink_talk_info(netlink_talk_filter,
 					(struct nlmsghdr *)nl_pkt,
 					dplane_ctx_get_ns(ctx), 0);
