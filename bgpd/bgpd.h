@@ -49,6 +49,11 @@
 
 #include "lib/bfd.h"
 
+/* For RPKI */
+#include "rtrlib/rtrlib.h"
+#include "rtrlib/rtr_mgr.h"
+#include "rtrlib/bgpsec/bgpsec.h"
+
 #define BGP_MAX_HOSTNAME 64	/* Linux max, is larger than most other sys */
 #define BGP_PEER_MAX_HASH_SIZE 16384
 
@@ -243,6 +248,37 @@ struct vpn_policy {
 	uint32_t tovpn_sid_index; /* unset => set to 0 */
 	struct in6_addr *tovpn_sid;
 	struct in6_addr *tovpn_zebra_vrf_sid_last_sent;
+};
+
+#define SKI_STR_SIZE 41
+
+/*
+ * A key struct that holds the private key for BGPsec signature.
+ */
+struct private_key {
+    /* The location of the private key on the file system. */
+    char *filepath;
+
+    /* The length of the filepath string */
+    uint16_t filepath_len;
+
+    /* The byte representation of the private key. */
+    uint8_t *key_buffer;
+
+    /* The length of the private key. */
+    uint16_t key_len;
+
+	/* Subject Key Identifier of the private BGPsec key */
+	uint8_t ski[SKI_SIZE];
+
+	/* Subject Key Identifier in human readable form */
+	unsigned char ski_str[SKI_STR_SIZE];
+
+    /* A bool that tells if the key was successfully loaded. */
+    bool loaded;
+
+    /* A bool that tells if the key is used for signing. */
+    bool active;
 };
 
 /*
@@ -739,6 +775,9 @@ struct bgp {
 	struct list *srv6_functions;
 
 	QOBJ_FIELDS;
+	/* Private BGPsec key */
+	struct private_key *priv_key;
+
 };
 DECLARE_QOBJ_TYPE(bgp);
 
@@ -1157,6 +1196,14 @@ struct peer {
 #define PEER_CAP_ENHANCED_RR_RCV (1U << 18) /* enhanced rr received */
 #define PEER_CAP_EXTENDED_MESSAGE_ADV (1U << 19)
 #define PEER_CAP_EXTENDED_MESSAGE_RCV (1U << 20)
+#define PEER_CAP_BGPSEC_SEND_IPV4_ADV       (1U << 19) /* bgpsec send IPv4 advertised */
+#define PEER_CAP_BGPSEC_SEND_IPV6_ADV       (1U << 20) /* bgpsec send IPv6 advertised */
+#define PEER_CAP_BGPSEC_SEND_IPV4_RCV       (1U << 21) /* bgpsec send IPv4 received */
+#define PEER_CAP_BGPSEC_SEND_IPV6_RCV       (1U << 22) /* bgpsec send IPv6 received */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV    (1U << 23) /* bgpsec receive IPv4 advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV    (1U << 24) /* bgpsec receive IPv6 advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV    (1U << 25) /* bgpsec receive IPv4 received */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV    (1U << 26) /* bgpsec receive IPv6 received */
 
 	/* Capability flags (reset in bgp_stop) */
 	uint32_t af_cap[AFI_MAX][SAFI_MAX];
@@ -1270,6 +1317,14 @@ struct peer {
 	 *& PEER_FLAG_GRACEFUL_RESTART_HELPER
 	 *and PEER_FLAG_GRACEFUL_RESTART_GLOBAL_INHERIT
 	 */
+
+#define PEER_FLAG_TIMER_DELAYOPEN (1 << 27) /* delayopen timer */
+
+	/* BGPsec Peer related  flags */
+#define PEER_FLAG_BGPSEC_SEND_IPV4          (1 << 28) /* bgpsec send IPv4 */
+#define PEER_FLAG_BGPSEC_SEND_IPV6          (1 << 29) /* bgpsec send IPv6 */
+#define PEER_FLAG_BGPSEC_RECEIVE_IPV4       (1 << 30) /* bgpsec receive IPv4 */
+#define PEER_FLAG_BGPSEC_RECEIVE_IPV6       (1 << 31) /* bgpsec receive IPv6 */
 
 	struct bgp_peer_gr PEER_GR_FSM[BGP_PEER_GR_MODE][BGP_PEER_GR_EVENT_CMD];
 	enum peer_mode peer_gr_present_state;
@@ -1734,6 +1789,7 @@ struct bgp_nlri {
 #define BGP_ATTR_ENCAP                          23
 #define BGP_ATTR_IPV6_EXT_COMMUNITIES           25
 #define BGP_ATTR_LARGE_COMMUNITIES              32
+#define BGP_ATTR_BGPSEC_PATH                    33
 #define BGP_ATTR_PREFIX_SID                     40
 #define BGP_ATTR_SRTE_COLOR                     51
 #ifdef ENABLE_BGP_VNC_ATTR
@@ -2215,6 +2271,8 @@ int bgp_peer_gr_init(struct peer *peer);
 		}                                                              \
 	} while (0)
 
+extern int bgp_use_bgpsec(struct peer *peer, afi_t afi, safi_t safi);
+
 static inline struct bgp *bgp_lock(struct bgp *bgp)
 {
 	bgp->lock++;
@@ -2340,7 +2398,7 @@ static inline int peer_dynamic_neighbor(struct peer *peer)
 
 static inline int peer_cap_enhe(struct peer *peer, afi_t afi, safi_t safi)
 {
-	return (CHECK_FLAG(peer->af_cap[afi][safi], PEER_CAP_ENHE_AF_NEGO));
+    return (CHECK_FLAG(peer->af_cap[afi][safi], PEER_CAP_ENHE_AF_NEGO));
 }
 
 /* Lookup VRF for BGP instance based on its type. */
@@ -2427,6 +2485,7 @@ DECLARE_HOOK(bgp_rpki_prefix_status,
 	      const struct prefix *prefix),
 	     (peer, attr, prefix));
 
+DECLARE_HOOK(bgp_bgpsec_cleanup, (struct bgp *bgp), (bgp))
 void peer_nsf_stop(struct peer *peer);
 
 void peer_tcp_mss_set(struct peer *peer, uint32_t tcp_mss);

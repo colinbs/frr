@@ -12,7 +12,8 @@ TESTS_BGPD = \
 	tests/bgpd/test_mp_attr \
 	tests/bgpd/test_mpath \
 	tests/bgpd/test_bgp_table
-IGNORE_BGPD =
+IGNORE_BGPD = \
+    tests/bgpd/test_bgpsec
 else
 TESTS_BGPD =
 IGNORE_BGPD = --ignore=bgpd/

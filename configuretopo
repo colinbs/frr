@@ -1,0 +1,16 @@
+#!/bin/bash
+
+./configure --enable-rpki \
+            --prefix=/usr \
+            --sbindir=/usr/lib/frr \
+            --sysconfdir=/etc/frr \
+            --libdir=/usr/lib \
+            --localstatedir=/var/run/frr \
+            --disable-nhrpd \
+            --enable-vty-group=frrvty \
+            --enable-user=frr \
+            --enable-group=frr \
+            --enable-vtysh \
+            --enable-pimd \
+            --enable-multipath=64 \
+            --with-pkg-extra-version=-my-manual-build

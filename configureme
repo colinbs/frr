@@ -1,0 +1,12 @@
+#!/bin/bash
+
+./configure --enable-rpki \
+            --prefix=/usr \
+            --sbindir=/usr/lib/frr \
+            --sysconfdir=/etc/frr \
+            --libdir=/usr/lib \
+            --localstatedir=/var/run/frr \
+            --disable-nhrpd \
+            --enable-vty-group=frrvty \
+            --enable-user=colin \
+            --enable-group=colin
