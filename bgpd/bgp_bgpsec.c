@@ -57,8 +57,6 @@
 #include "rtrlib/rtrlib.h"
 #include "rtrlib/transport/tcp/tcp_transport.h"
 #include "rtrlib/spki/spkitable.h"
-/*#include "openssl/x509v3.h"*/
-/*#include "openssl/pem.h"*/
 #if defined(FOUND_SSH)
 #include "rtrlib/transport/ssh/ssh_transport.h"
 #endif
@@ -66,10 +64,6 @@
 #include "hook.h"
 #include "libfrr.h"
 #include "version.h"
-
-#ifndef VTYSH_EXTRACT_PL
-#include "bgpd/bgp_bgpsec_clippy.c"
-#endif
 
 #define BGPSEC_DEBUG(...)                                                \
 	if (bgpsec_debug) {                                                  \
