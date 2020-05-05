@@ -209,6 +209,10 @@ nodist_tests_bgpd_test_peer_attr_SOURCES = \
     yang/frr-deviations-bgp-datacenter.yang.c \
     # end
 
+tests_bgpd_test_bgpsec_CFLAGS = $(TESTS_CFLAGS)
+tests_bgpd_test_bgpsec_CPPFLAGS = $(TESTS_CPPFLAGS)
+tests_bgpd_test_bgpsec_LDADD = $(BGP_TEST_LDADD)
+tests_bgpd_test_bgpsec_SOURCES = tests/bgpd/test_bgpsec.c
 
 tests_isisd_test_fuzz_isis_tlv_CFLAGS = $(TESTS_CFLAGS) -I$(top_builddir)/tests/isisd
 tests_isisd_test_fuzz_isis_tlv_CPPFLAGS = $(TESTS_CPPFLAGS) -I$(top_builddir)/tests/isisd

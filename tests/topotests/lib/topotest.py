@@ -1311,7 +1311,7 @@ class Router(Node):
                 return False
         return True
 
-    def loadConf(self, daemon, source=None, param=None):
+    def loadConf(self, daemon, source=None, param=None, privkey=None):
         # print "Daemons before:", self.daemons
         if daemon in self.daemons.keys():
             self.daemons[daemon] = 1
@@ -1322,6 +1322,16 @@ class Router(Node):
                 self.waitOutput()
             else:
                 self.cmd("cp %s /etc/%s/%s.conf" % (source, self.routertype, daemon))
+                self.waitOutput()
+            if privkey:
+                self.cmd("cp %s /etc/%s/%s.der" % (privkey, self.routertype, "privkey"))
+                self.waitOutput()
+                self.cmd("chmod 640 /etc/%s/%s.der" % (self.routertype, "privkey"))
+                self.waitOutput()
+                self.cmd(
+                    "chown %s:%s /etc/%s/%s.der"
+                    % (self.routertype, self.routertype, self.routertype, "privkey")
+                )
                 self.waitOutput()
             self.cmd("chmod 640 /etc/%s/%s.conf" % (self.routertype, daemon))
             self.waitOutput()

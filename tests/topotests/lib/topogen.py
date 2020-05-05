@@ -653,7 +653,7 @@ class TopoRouter(TopoGear):
         self.logger.info('check capability {} for "{}"'.format(param, daemonstr))
         return self.tgen.net[self.name].checkCapability(daemonstr, param)
 
-    def load_config(self, daemon, source=None, param=None):
+    def load_config(self, daemon, source=None, param=None, privkey=None):
         """
         Loads daemon configuration from the specified source
         Possible daemon values are: TopoRouter.RD_ZEBRA, TopoRouter.RD_RIP,
@@ -663,7 +663,7 @@ class TopoRouter(TopoGear):
         """
         daemonstr = self.RD.get(daemon)
         self.logger.info('loading "{}" configuration: {}'.format(daemonstr, source))
-        self.tgen.net[self.name].loadConf(daemonstr, source, param)
+        self.tgen.net[self.name].loadConf(daemonstr, source, param, privkey)
 
     def check_router_running(self):
         """
