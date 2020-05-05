@@ -1478,7 +1478,12 @@ static struct cmd_node rpki_node = {
 	.prompt = "%s(config-rpki)# ",
 };
 
-static struct cmd_node bgpsec_node = {BGPSEC_NODE, "%s(config-bgpsec)# ", 1};
+static struct cmd_node bgpsec_node = {
+    .name = "bgpsec",
+    .node = BGPSEC_NODE,
+    .parent_node = CONFIG_NODE,
+    .prompt = "%s(config-bgpsec)# ",
+};
 
 #if HAVE_BFDD > 0
 static struct cmd_node bfd_node = {
@@ -3818,6 +3823,7 @@ void vtysh_init_vty(void)
 	install_node(&vty_node);
 	install_node(&rpki_node);
 	install_node(&bmp_node);
+	install_node(&bgpsec_node);
 #if HAVE_BFDD > 0
 	install_node(&bfd_node);
 	install_node(&bfd_peer_node);
