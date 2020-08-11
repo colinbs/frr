@@ -3708,7 +3708,6 @@ def verify_attributes_for_evpn_routes(
     """
     API to verify rd and rt value using "sh bgp l2vpn evpn 10.1.1.1"
     command.
-
     Parameters
     ----------
     * `tgen`: topogen object
@@ -3722,7 +3721,6 @@ def verify_attributes_for_evpn_routes(
     * `ipLen` : IP prefix length
     * `rd_peer` : Peer name from which RD will be auto-generated
     * `rt_peer` : Peer name from which RT will be auto-generated
-
     Usage
     -----
         input_dict_1 = {
@@ -4099,7 +4097,6 @@ def verify_evpn_routes(
     """
     API to verify evpn routes using "sh bgp l2vpn evpn"
     command.
-
     Parameters
     ----------
     * `tgen`: topogen object
@@ -4110,7 +4107,6 @@ def verify_evpn_routes(
     * `route_type` : Route type 5 is supported as of now
     * `EthTag` : Ethernet tag, by-default is 0
     * `next_hop` : Prefered nexthop for the evpn routes
-
     Usage
     -----
         input_dict_1 = {
@@ -4123,7 +4119,6 @@ def verify_evpn_routes(
             }
         }
         result = verify_evpn_routes(tgen, topo, input_dict)
-
     Returns
     -------
     errormsg(str) or True
