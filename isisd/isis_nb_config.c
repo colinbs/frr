@@ -43,6 +43,7 @@
 #include "isisd/isis_csm.h"
 #include "isisd/isis_adjacency.h"
 #include "isisd/isis_spf.h"
+#include "isisd/isis_spf_private.h"
 #include "isisd/isis_te.h"
 #include "isisd/isis_memory.h"
 #include "isisd/isis_mt.h"
@@ -2940,14 +2941,23 @@ int lib_interface_isis_mpls_holddown_destroy(struct nb_cb_destroy_args *args)
 int lib_interface_isis_fast_reroute_level_1_ti_lfa_enable_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
-		break;
+	struct isis_area *area;
+	struct isis_circuit *circuit;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	circuit = nb_running_get_entry(args->dnode, NULL, true);
+	circuit->tilfa_protection[0] = yang_dnode_get_bool(args->dnode, NULL);
+	if (circuit->tilfa_protection[0])
+		circuit->area->lfa_protected_links[0]++;
+	else {
+		assert(circuit->area->lfa_protected_links[0] > 0);
+		circuit->area->lfa_protected_links[0]--;
 	}
+
+	area = circuit->area;
+	lsp_regenerate_schedule(area, area->is_type, 0);
 
 	return NB_OK;
 }
@@ -2959,14 +2969,18 @@ int lib_interface_isis_fast_reroute_level_1_ti_lfa_enable_modify(
 int lib_interface_isis_fast_reroute_level_1_ti_lfa_node_protection_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
-		break;
-	}
+	struct isis_area *area;
+	struct isis_circuit *circuit;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	circuit = nb_running_get_entry(args->dnode, NULL, true);
+	circuit->tilfa_node_protection[0] =
+		yang_dnode_get_bool(args->dnode, NULL);
+
+	area = circuit->area;
+	lsp_regenerate_schedule(area, area->is_type, 0);
 
 	return NB_OK;
 }
@@ -2978,14 +2992,23 @@ int lib_interface_isis_fast_reroute_level_1_ti_lfa_node_protection_modify(
 int lib_interface_isis_fast_reroute_level_2_ti_lfa_enable_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
-		break;
+	struct isis_area *area;
+	struct isis_circuit *circuit;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	circuit = nb_running_get_entry(args->dnode, NULL, true);
+	circuit->tilfa_protection[1] = yang_dnode_get_bool(args->dnode, NULL);
+	if (circuit->tilfa_protection[1])
+		circuit->area->lfa_protected_links[1]++;
+	else {
+		assert(circuit->area->lfa_protected_links[1] > 0);
+		circuit->area->lfa_protected_links[1]--;
 	}
+
+	area = circuit->area;
+	lsp_regenerate_schedule(area, area->is_type, 0);
 
 	return NB_OK;
 }
@@ -2997,14 +3020,18 @@ int lib_interface_isis_fast_reroute_level_2_ti_lfa_enable_modify(
 int lib_interface_isis_fast_reroute_level_2_ti_lfa_node_protection_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
-		break;
-	}
+	struct isis_area *area;
+	struct isis_circuit *circuit;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	circuit = nb_running_get_entry(args->dnode, NULL, true);
+	circuit->tilfa_node_protection[1] =
+		yang_dnode_get_bool(args->dnode, NULL);
+
+	area = circuit->area;
+	lsp_regenerate_schedule(area, area->is_type, 0);
 
 	return NB_OK;
 }
