@@ -6871,9 +6871,10 @@ DEFUN (ip_pim_joinprune_time,
        "Join Prune Send Interval\n"
        "Seconds\n")
 {
-	PIM_DECLVAR_CONTEXT(vrf, pim);
-	router->t_periodic = atoi(argv[3]->arg);
-	return CMD_SUCCESS;
+	nb_cli_enqueue_change(vty, "/frr-pim:pim/join-prune-interval",
+			NB_OP_MODIFY, argv[3]->arg);
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFUN (no_ip_pim_joinprune_time,
@@ -6885,9 +6886,15 @@ DEFUN (no_ip_pim_joinprune_time,
        "Join Prune Send Interval\n"
        "Seconds\n")
 {
-	PIM_DECLVAR_CONTEXT(vrf, pim);
-	router->t_periodic = PIM_DEFAULT_T_PERIODIC;
-	return CMD_SUCCESS;
+	char jp_default_timer[5];
+
+	snprintf(jp_default_timer, sizeof(jp_default_timer), "%d",
+			PIM_DEFAULT_T_PERIODIC);
+
+	nb_cli_enqueue_change(vty, "/frr-pim:pim/join-prune-interval",
+			NB_OP_MODIFY, jp_default_timer);
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFUN (ip_pim_register_suppress,
@@ -6898,9 +6905,10 @@ DEFUN (ip_pim_register_suppress,
        "Register Suppress Timer\n"
        "Seconds\n")
 {
-	PIM_DECLVAR_CONTEXT(vrf, pim);
-	router->register_suppress_time = atoi(argv[3]->arg);
-	return CMD_SUCCESS;
+	nb_cli_enqueue_change(vty, "/frr-pim:pim/register-suppress-time",
+			NB_OP_MODIFY, argv[3]->arg);
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFUN (no_ip_pim_register_suppress,
@@ -6912,9 +6920,15 @@ DEFUN (no_ip_pim_register_suppress,
        "Register Suppress Timer\n"
        "Seconds\n")
 {
-	PIM_DECLVAR_CONTEXT(vrf, pim);
-	router->register_suppress_time = PIM_REGISTER_SUPPRESSION_TIME_DEFAULT;
-	return CMD_SUCCESS;
+	char rs_default_timer[5];
+
+	snprintf(rs_default_timer, sizeof(rs_default_timer), "%d",
+			PIM_REGISTER_SUPPRESSION_TIME_DEFAULT);
+
+	nb_cli_enqueue_change(vty, "/frr-pim:pim/register-suppress-time",
+			NB_OP_MODIFY, rs_default_timer);
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFUN (ip_pim_rp_keep_alive,
@@ -6981,9 +6995,10 @@ DEFUN (ip_pim_packets,
        "packets to process at one time per fd\n"
        "Number of packets\n")
 {
-	PIM_DECLVAR_CONTEXT(vrf, pim);
-	router->packet_process = atoi(argv[3]->arg);
-	return CMD_SUCCESS;
+	nb_cli_enqueue_change(vty, "/frr-pim:pim/packets", NB_OP_MODIFY,
+			argv[3]->arg);
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFUN (no_ip_pim_packets,
@@ -6995,9 +7010,15 @@ DEFUN (no_ip_pim_packets,
        "packets to process at one time per fd\n"
        "Number of packets\n")
 {
-	PIM_DECLVAR_CONTEXT(vrf, pim);
-	router->packet_process = PIM_DEFAULT_PACKET_PROCESS;
-	return CMD_SUCCESS;
+	char default_packet[3];
+
+	snprintf(default_packet, sizeof(default_packet), "%d",
+			PIM_DEFAULT_PACKET_PROCESS);
+
+	nb_cli_enqueue_change(vty, "/frr-pim:pim/packets", NB_OP_MODIFY,
+			default_packet);
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY (igmp_group_watermark,
