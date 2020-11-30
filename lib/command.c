@@ -2305,7 +2305,7 @@ done:
 	return CMD_SUCCESS;
 }
 
-#ifdef DEV_BUILD
+#if defined(DEV_BUILD) && defined(HAVE_SCRIPTING)
 DEFUN(script,
       script_cmd,
       "script SCRIPT",
@@ -2423,7 +2423,7 @@ void cmd_init(int terminal)
 		install_element(VIEW_NODE, &echo_cmd);
 		install_element(VIEW_NODE, &autocomplete_cmd);
 		install_element(VIEW_NODE, &find_cmd);
-#ifdef DEV_BUILD
+#if defined(DEV_BUILD) && defined(HAVE_SCRIPTING)
 		install_element(VIEW_NODE, &script_cmd);
 #endif
 
