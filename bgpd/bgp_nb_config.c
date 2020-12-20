@@ -15192,6 +15192,64 @@ int bgp_neighbors_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_config_rmap_ex
 	return NB_OK;
 }
 
+static int bgp_neighbor_afi_safi_plist_modify(struct nb_cb_modify_args *args,
+					      int direct)
+{
+	struct bgp *bgp;
+	const char *peer_str;
+	struct peer *peer;
+	const struct lyd_node *nbr_dnode;
+	const struct lyd_node *nbr_af_dnode;
+	const char *af_name;
+	afi_t afi;
+	safi_t safi;
+	const char *name_str;
+
+	nbr_af_dnode = yang_dnode_get_parent(args->dnode, "afi-safi");
+	af_name = yang_dnode_get_string(nbr_af_dnode, "./afi-safi-name");
+	yang_afi_safi_identity2value(af_name, &afi, &safi);
+
+	nbr_dnode = yang_dnode_get_parent(nbr_af_dnode, "neighbor");
+	bgp = nb_running_get_entry(nbr_dnode, NULL, true);
+	peer_str = yang_dnode_get_string(nbr_dnode, "./remote-address");
+	peer = bgp_neighbor_peer_lookup(bgp, peer_str, args->errmsg,
+					args->errmsg_len);
+
+	name_str = yang_dnode_get_string(args->dnode, NULL);
+	if (peer_prefix_list_set(peer, afi, safi, direct, name_str) < 0)
+		return NB_ERR_INCONSISTENCY;
+
+	return NB_OK;
+}
+
+static int bgp_neighbor_afi_safi_plist_destroy(struct nb_cb_destroy_args *args,
+					       int direct)
+{
+	struct bgp *bgp;
+	const char *peer_str;
+	struct peer *peer;
+	const struct lyd_node *nbr_dnode;
+	const struct lyd_node *nbr_af_dnode;
+	const char *af_name;
+	afi_t afi;
+	safi_t safi;
+
+	nbr_af_dnode = yang_dnode_get_parent(args->dnode, "afi-safi");
+	af_name = yang_dnode_get_string(nbr_af_dnode, "./afi-safi-name");
+	yang_afi_safi_identity2value(af_name, &afi, &safi);
+
+	nbr_dnode = yang_dnode_get_parent(nbr_af_dnode, "neighbor");
+	bgp = nb_running_get_entry(nbr_dnode, NULL, true);
+	peer_str = yang_dnode_get_string(nbr_dnode, "./remote-address");
+	peer = bgp_neighbor_peer_lookup(bgp, peer_str, args->errmsg,
+					args->errmsg_len);
+
+	if (peer_prefix_list_unset(peer, afi, safi, direct) < 0)
+		return NB_ERR_INCONSISTENCY;
+
+	return NB_OK;
+}
+
 /*
  * XPath:
  * /frr-routing:routing/control-plane-protocols/control-plane-protocol/frr-bgp:bgp/neighbors/neighbor/afi-safis/afi-safi/ipv4-unicast/filter-config/plist-import
@@ -15203,9 +15261,9 @@ int bgp_neighbors_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_config_plist_i
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_neighbor_afi_safi_plist_modify(args, FILTER_IN);
 	}
 
 	return NB_OK;
@@ -15218,9 +15276,9 @@ int bgp_neighbors_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_config_plist_i
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_neighbor_afi_safi_plist_destroy(args, FILTER_IN);
 	}
 
 	return NB_OK;
@@ -15237,9 +15295,9 @@ int bgp_neighbors_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_config_plist_e
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_neighbor_afi_safi_plist_modify(args, FILTER_OUT);
 	}
 
 	return NB_OK;
@@ -15252,9 +15310,9 @@ int bgp_neighbors_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_config_plist_e
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_neighbor_afi_safi_plist_destroy(args, FILTER_OUT);
 	}
 
 	return NB_OK;
@@ -23510,6 +23568,65 @@ int bgp_neighbors_unnumbered_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_con
 	return NB_OK;
 }
 
+static int
+bgp_unnumbered_neighbor_afi_safi_plist_modify(struct nb_cb_modify_args *args,
+					      int direct)
+{
+	struct bgp *bgp;
+	const char *peer_str;
+	struct peer *peer;
+	const struct lyd_node *nbr_dnode;
+	const struct lyd_node *nbr_af_dnode;
+	const char *af_name;
+	afi_t afi;
+	safi_t safi;
+	const char *name_str;
+
+	nbr_af_dnode = yang_dnode_get_parent(args->dnode, "afi-safi");
+	af_name = yang_dnode_get_string(nbr_af_dnode, "./afi-safi-name");
+	yang_afi_safi_identity2value(af_name, &afi, &safi);
+
+	nbr_dnode = yang_dnode_get_parent(nbr_af_dnode, "unnumbered-neighbor");
+	bgp = nb_running_get_entry(nbr_dnode, NULL, true);
+	peer_str = yang_dnode_get_string(nbr_dnode, "./interface");
+	peer = bgp_unnumbered_neighbor_peer_lookup(bgp, peer_str, args->errmsg,
+						   args->errmsg_len);
+
+	name_str = yang_dnode_get_string(args->dnode, NULL);
+	if (peer_prefix_list_set(peer, afi, safi, direct, name_str) < 0)
+		return NB_ERR_INCONSISTENCY;
+
+	return NB_OK;
+}
+
+static int
+bgp_unnumbered_neighbor_afi_safi_plist_destroy(struct nb_cb_destroy_args *args,
+					       int direct)
+{
+	struct bgp *bgp;
+	const char *peer_str;
+	struct peer *peer;
+	const struct lyd_node *nbr_dnode;
+	const struct lyd_node *nbr_af_dnode;
+	const char *af_name;
+	afi_t afi;
+	safi_t safi;
+
+	nbr_af_dnode = yang_dnode_get_parent(args->dnode, "afi-safi");
+	af_name = yang_dnode_get_string(nbr_af_dnode, "./afi-safi-name");
+	yang_afi_safi_identity2value(af_name, &afi, &safi);
+
+	nbr_dnode = yang_dnode_get_parent(nbr_af_dnode, "unnumbered-neighbor");
+	bgp = nb_running_get_entry(nbr_dnode, NULL, true);
+	peer_str = yang_dnode_get_string(nbr_dnode, "./interface");
+	peer = bgp_unnumbered_neighbor_peer_lookup(bgp, peer_str, args->errmsg,
+						   args->errmsg_len);
+
+	if (peer_prefix_list_unset(peer, afi, safi, direct) < 0)
+		return NB_ERR_INCONSISTENCY;
+
+	return NB_OK;
+}
 /*
  * XPath:
  * /frr-routing:routing/control-plane-protocols/control-plane-protocol/frr-bgp:bgp/neighbors/unnumbered-neighbor/afi-safis/afi-safi/ipv4-unicast/filter-config/plist-import
@@ -23521,9 +23638,10 @@ int bgp_neighbors_unnumbered_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_con
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_unnumbered_neighbor_afi_safi_plist_modify(args,
+								     FILTER_IN);
 	}
 
 	return NB_OK;
@@ -23536,9 +23654,10 @@ int bgp_neighbors_unnumbered_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_con
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_unnumbered_neighbor_afi_safi_plist_destroy(
+			args, FILTER_IN);
 	}
 
 	return NB_OK;
@@ -23555,9 +23674,10 @@ int bgp_neighbors_unnumbered_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_con
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_unnumbered_neighbor_afi_safi_plist_modify(
+			args, FILTER_OUT);
 	}
 
 	return NB_OK;
@@ -23570,9 +23690,10 @@ int bgp_neighbors_unnumbered_neighbor_afi_safis_afi_safi_ipv4_unicast_filter_con
 	case NB_EV_VALIDATE:
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		/* TODO: implement me. */
 		break;
+	case NB_EV_APPLY:
+		return bgp_unnumbered_neighbor_afi_safi_plist_destroy(
+			args, FILTER_OUT);
 	}
 
 	return NB_OK;
