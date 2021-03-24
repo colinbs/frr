@@ -1823,9 +1823,6 @@ static int resolve_backup_nexthops(const struct nexthop *nexthop,
 
 	assert(nexthop->backup_num <= NEXTHOP_MAX_BACKUPS);
 
-	if (resolve_nhe->backup_info->nhe == NULL)
-		resolve_nhe->backup_info->nhe = zebra_nhg_alloc();
-
 	/* Locate backups from the original nexthop's backup index and nhe */
 	for (i = 0; i < nexthop->backup_num; i++) {
 		idx = nexthop->backup_idx[i];
@@ -1840,6 +1837,8 @@ static int resolve_backup_nexthops(const struct nexthop *nexthop,
 			resolved->backup_idx[resolved->backup_num] =
 				map->map[j].new_idx;
 			resolved->backup_num++;
+
+			SET_FLAG(resolved->flags, NEXTHOP_FLAG_HAS_BACKUP);
 
 			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
 				zlog_debug("%s: found map idx orig %d, new %d",
@@ -1865,6 +1864,9 @@ static int resolve_backup_nexthops(const struct nexthop *nexthop,
 		if (bnh == NULL)
 			continue;
 
+		if (resolve_nhe->backup_info == NULL)
+			resolve_nhe->backup_info = zebra_nhg_backup_alloc();
+
 		/* Update backup info in the resolving nexthop and its nhe */
 		newnh = nexthop_dup_no_recurse(bnh, NULL);
 
@@ -1880,6 +1882,7 @@ static int resolve_backup_nexthops(const struct nexthop *nexthop,
 			}
 
 			nh->next = newnh;
+			j++;
 
 		} else	/* First one */
 			resolve_nhe->backup_info->nhe->nhg.nexthop = newnh;
@@ -1887,6 +1890,8 @@ static int resolve_backup_nexthops(const struct nexthop *nexthop,
 		/* Capture index */
 		resolved->backup_idx[resolved->backup_num] = j;
 		resolved->backup_num++;
+
+		SET_FLAG(resolved->flags, NEXTHOP_FLAG_HAS_BACKUP);
 
 		if (IS_ZEBRA_DEBUG_RIB_DETAILED)
 			zlog_debug("%s: added idx orig %d, new %d",
