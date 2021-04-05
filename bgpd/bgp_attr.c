@@ -1259,6 +1259,10 @@ void bgp_attr_flush(struct attr *attr)
 		bgp_attr_set_vnc_subtlvs(attr, NULL);
 	}
 #endif
+    if (attr->bgpsecpath && !attr->bgpsecpath->refcnt) {
+        bgpsec_aspath_free(attr->bgpsecpath);
+        attr->bgpsecpath = NULL;
+    }
 }
 
 /* Implement draft-scudder-idr-optional-transitive behaviour and

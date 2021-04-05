@@ -2745,8 +2745,8 @@ struct bgpsec_aspath *copy_bgpsecpath(const struct bgpsec_aspath *aspath)
     new_aspath->pfx->length = aspath->pfx->length;
     memcpy(new_aspath->pfx->nlri, aspath->pfx->nlri, aspath->pfx->length);
 
-    new_aspath->str = XMALLOC(MTYPE_BGP_BGPSEC_PATH_STR, aspath->str_len + 1);
-    strcpy(new_aspath->str, aspath->str);
+    new_aspath->str = XMALLOC(MTYPE_BGP_BGPSEC_PATH_STR, aspath->str_len);
+    memcpy(new_aspath->str, aspath->str, aspath->str_len);
     new_aspath->str_len = aspath->str_len;
 
     return new_aspath;

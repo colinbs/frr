@@ -2582,6 +2582,7 @@ int bgp_process_packet(struct thread *thread)
 			atomic_fetch_add_explicit(&peer->update_in, 1,
 						  memory_order_relaxed);
 			peer->readtime = monotime(NULL);
+            // TODO: measure time here
 			mprc = bgp_update_receive(peer, size);
 			if (mprc == BGP_Stop)
 				flog_err(
