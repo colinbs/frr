@@ -991,8 +991,12 @@ static int bgp_capability_parse(struct peer *peer, size_t length,
 		// BGPsecHook to parse capability.
 		case CAPABILITY_CODE_BGPSEC:
 			ret = hook_call(bgp_capability_bgpsec, peer, &caphdr);
-			if (ret)
-				ret = -1;
+			if (ret) {
+				ret = 0;
+                flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
+                         "%s: Ignoring BGPsec capability from peer %s",
+                         __func__, peer->host);
+            }
 			break;
 		default:
 			if (caphdr.code > 128) {

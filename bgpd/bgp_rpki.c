@@ -162,7 +162,8 @@ static int gen_bgpsec_sig(struct peer *peer, struct bgpsec_aspath *bgpsecpath,
                           afi_t afi, safi_t safi,
                           struct bgpsec_secpath *own_sps,
                           struct bgpsec_sigseg **own_ss);
-static int attr_bgpsec_path(struct bgp_attr_parser_args *args);
+static int attr_bgpsec_path(struct bgp_attr_parser_args *args,
+                            struct bgp_nlri *mp_update);
 static int build_bgpsec_aspath(struct bgp *bgp,
                                struct peer *peer,
                                struct stream *s,
@@ -868,7 +869,7 @@ static int val_bgpsec_aspath(struct attr *attr,
         memcpy(&addr_n,
                (mp_update->nlri + 1), // +1 to skip len byte
                pfx_len_b);
-        pfx->prefix.u.addr4.addr = ntohl(addr_n);
+        pfx->prefix.u.addr4.addr = addr_n;
         break;
     case AFI_IP6:
         pfx->prefix.ver = LRTR_IPV6;
@@ -1839,7 +1840,8 @@ static int gen_bgpsec_sig(struct peer *peer, struct bgpsec_aspath *bgpsecpath,
 	return 0;
 }
 
-static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
+static int attr_bgpsec_path(struct bgp_attr_parser_args *args,
+                            struct bgp_nlri *mp_update)
 {
 	struct peer *const peer = args->peer;
 	struct attr *const attr = args->attr;
@@ -1857,6 +1859,31 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 	uint16_t ss_len = 0;
 	uint8_t alg = 0;
 
+    if (mp_update->afi == AFI_IP) {
+        if (!CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV4)
+            || !CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_IPV4_RCV)) {
+            flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                      "%s sent BGPsec UPDATE, but capabilities are not set for AFI %s",
+                      peer->host, afi2str(mp_update->afi));
+            return -1;
+        }
+    }
+    if (mp_update->afi == AFI_IP6) {
+	    if (!CHECK_FLAG(peer->flags, PEER_FLAG_BGPSEC_SEND_IPV6)
+            || !CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_SEND_IPV6_RCV)) {
+            flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                      "%s sent BGPsec UPDATE, but capabilities are not set for AFI %s",
+                      peer->host, afi2str(mp_update->afi));
+            return -1;
+        }
+    }
+    if (CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_AS_PATH))) {
+        flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                  "%s sent invalid BGPsec UPDATE (contains AS_PATH and BGPsec_PATH)",
+                  peer->host);
+        return -1;
+    }
+
 	sps_count = (stream_getw(peer->curr) - 2) / BGPSEC_SECURE_PATH_SEGMENT_SIZE;
 	remain_len -= 2;
 
@@ -1869,6 +1896,13 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 		curr_sps->flags = stream_getc(peer->curr);
 		curr_sps->as = stream_getl(peer->curr);
 
+        if (curr_sps->pcount == 0) {
+            flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                      "%s sent invalid BGPsec UPDATE (encountered pCount value 0)",
+                      peer->host);
+            return -1;
+        }
+
 		if (prev_sps) {
             prev_sps->next = curr_sps;
 		} else {
@@ -1879,6 +1913,13 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 		prev_sps = curr_sps;
 	}
 
+    if (peer->as != aspath->secpaths->as) {
+        flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                  "%s sent invalid BGPsec UPDATE (last AS (%d) does not match peer AS (%d))",
+                  peer->host, aspath->secpaths->as, peer->as);
+        return -1;
+    }
+
     aspath->path_count = sps_count;
 
 	/* Parse the first signature block from the stream and build the
@@ -1887,6 +1928,13 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
     sigblock1->sig_count = 0;
 	sigblock1->length = stream_getw(peer->curr);
 	sigblock1->alg = alg = stream_getc(peer->curr);
+
+    if (alg != 1) {
+        flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                  "%s sent invalid BGPsec UPDATE (invalid algorithm ID %d)",
+                  peer->host, alg);
+        return -1;
+    }
 
     /* Subtract 3 (length and algorithm) from the total sigblock length to get
      * the length of the signature segments only. */
@@ -1916,6 +1964,14 @@ static int attr_bgpsec_path(struct bgp_attr_parser_args *args)
 
         sigblock1->sig_count++;
 	}
+
+    if (sps_count != sigblock1->sig_count) {
+        flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
+                  "%s sent invalid BGPsec UPDATE (uneven amount of segments)",
+                  peer->host);
+        return -1;
+    }
+
 	aspath->sigblock1 = sigblock1;
 	remain_len -= sigblock1->length;
 

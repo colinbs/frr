@@ -56,7 +56,10 @@
 #include "bgp_flowspec_private.h"
 #include "bgp_mac.h"
 
-DEFINE_HOOK(bgp_attr_bgpsec_path, (struct bgp_attr_parser_args *args), (args))
+DEFINE_HOOK(bgp_attr_bgpsec_path,
+            (struct bgp_attr_parser_args *args,
+            struct bgp_nlri *mp_update),
+            (args, mp_update))
 
 DEFINE_HOOK(bgp_packet_build_bgpsec_aspath,
             (struct bgp *bgp, struct peer *peer, struct stream *s,
@@ -3265,7 +3268,7 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 			ret = bgp_attr_ipv6_ext_communities(&attr_args);
             break;
 		case BGP_ATTR_BGPSEC_PATH:
-			ret = hook_call(bgp_attr_bgpsec_path, &attr_args);
+			ret = hook_call(bgp_attr_bgpsec_path, &attr_args, mp_update);
 			if (!ret)
 				ret = BGP_ATTR_PARSE_PROCEED;
 			break;

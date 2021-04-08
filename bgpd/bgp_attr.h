@@ -556,7 +556,10 @@ bgp_attr_set_vnc_subtlvs(struct attr *attr,
 
 #include "hook.h"
 #include "bgp_aspath.h"
-DECLARE_HOOK(bgp_attr_bgpsec_path, (struct bgp_attr_parser_args *args), (args))
+DECLARE_HOOK(bgp_attr_bgpsec_path,
+            (struct bgp_attr_parser_args *args,
+            struct bgp_nlri *mp_update),
+            (args, mp_update))
 
 DECLARE_HOOK(bgp_packet_build_bgpsec_aspath,
             (struct bgp *bgp, struct peer *peer, struct stream *s,
