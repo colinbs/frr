@@ -964,15 +964,16 @@ static int build_bgpsec_aspath(struct bgp *bgp,
     if (attr->bgpsecpath) {
         /* Search for a bgpsecpath with the given AS path and given prefix */
         struct bgpsec_aspath *tmp_path = bgpsec_aspath_new();
-        tmp_path->str = XMALLOC(MTYPE_BGP_BGPSEC_PATH_STR, attr->aspath->str_len);
+        tmp_path->str = XCALLOC(MTYPE_BGP_BGPSEC_PATH_STR, attr->aspath->str_len + 1);
         tmp_path->str_len = attr->aspath->str_len;
-        memcpy(tmp_path->str, attr->aspath->str, attr->aspath->str_len);
+        /*memcpy(tmp_path->str, attr->aspath->str, attr->aspath->str_len);*/
+        strcpy(tmp_path->str, attr->aspath->str);
 
         int pfx_len_b = (bgpsec_p->prefixlen + 7) / 8;
         uint8_t cidr = (uint8_t)bgpsec_p->prefixlen;
 
-        tmp_path->pfx = XMALLOC(MTYPE_BGP_BGPSEC_NLRI, sizeof(struct bgp_nlri));
-        tmp_path->pfx->nlri = XMALLOC(MTYPE_BGP_BGPSEC_NLRI, pfx_len_b + 1);
+        tmp_path->pfx = XCALLOC(MTYPE_BGP_BGPSEC_NLRI, sizeof(struct bgp_nlri));
+        tmp_path->pfx->nlri = XCALLOC(MTYPE_BGP_BGPSEC_NLRI, pfx_len_b + 1);
         tmp_path->pfx->length = pfx_len_b + 1;
         memcpy(tmp_path->pfx->nlri, &cidr, sizeof(uint8_t));
         memcpy(tmp_path->pfx->nlri + 1, bgpsec_p->u.val, pfx_len_b);
@@ -1013,8 +1014,8 @@ static int build_bgpsec_aspath(struct bgp *bgp,
 
     bgpsec_sps_free(own_sps);
     bgpsec_ss_free(own_ss);
-    bgpsec_aspath_free(aspath);
-    aspath = NULL;
+    /*bgpsec_aspath_free(aspath);*/
+    /*aspath = NULL;*/
 
     return rtval;
 }
@@ -2038,12 +2039,13 @@ int bgpsec_path2str(struct bgpsec_aspath *aspath)
         length = 1;
     }
 
-    /* Remove the last separator space */
-    buffer[length - 1] = '\0';
-
 #undef ASN_STR_LEN
     /* Space for \0 is included in length */
-    aspath->str = XMALLOC(MTYPE_BGP_BGPSEC_PATH_STR, length);
+    aspath->str = XCALLOC(MTYPE_BGP_BGPSEC_PATH_STR, length);
+
+    /* Remove the last separator space */
+    length -= 1;
+    buffer[length] = '\0';
 
     strcpy(aspath->str, buffer);
     aspath->str_len = length;
