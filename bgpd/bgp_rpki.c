@@ -100,6 +100,8 @@ DEFINE_MTYPE_STATIC(BGPD, BGP_RPKI_CACHE_GROUP, "BGP RPKI Cache server group");
 #define RPKI_OUTPUT_STRING "Control rpki specific settings\n"
 #define BGPSEC_OUTPUT_STRING "Control BGPsec specific settings\n"
 
+static double total_cpu_ticks_rpki_start = 0;
+
 struct cache {
 	enum { TCP, SSH } type;
 	struct tr_socket *tr_socket;
@@ -837,7 +839,6 @@ static int val_bgpsec_aspath(struct attr *attr,
     struct rtr_bgpsec *data;
     struct bgpsec_aspath *aspath;
     uint8_t pfx_len_b; // prefix length in bytes
-    uint32_t addr_n = 0;
 
     if (!rtr_is_running) {
         BGPSEC_DEBUG("RPKI is not running");
@@ -856,28 +857,16 @@ static int val_bgpsec_aspath(struct attr *attr,
         return 1;
     }
 
-    pfx = rtr_mgr_bgpsec_nlri_new();
-
     /* The first byte of the NLRI is the length in bits.
      * Convert it into bytes. */
-    pfx->prefix_len = *mp_update->nlri;
-    pfx_len_b = (pfx->prefix_len + 7) / 8;
+    pfx_len_b = (*mp_update->nlri + 7) / 8;
+    pfx = rtr_mgr_bgpsec_nlri_new(pfx_len_b);
+    pfx->nlri_len = *mp_update->nlri;
 
-    switch (mp_update->afi) {
-    case AFI_IP:
-        pfx->prefix.ver = LRTR_IPV4;
-        memcpy(&addr_n,
-               (mp_update->nlri + 1), // +1 to skip len byte
-               pfx_len_b);
-        pfx->prefix.u.addr4.addr = addr_n;
-        break;
-    case AFI_IP6:
-        pfx->prefix.ver = LRTR_IPV6;
-        memcpy(pfx->prefix.u.addr6.addr,
-               (mp_update->nlri + 1), // +1 to skip len byte
-               pfx_len_b);
-        break;
-    }
+    pfx->afi = mp_update->afi;
+    memcpy(pfx->nlri,
+           (mp_update->nlri + 1), // +1 to skip len byte
+           pfx_len_b);
 
     data = rtr_mgr_bgpsec_new(aspath->sigblock1->alg,
                               mp_update->safi,
@@ -1723,6 +1712,7 @@ static int gen_bgpsec_sig(struct peer *peer, struct bgpsec_aspath *bgpsecpath,
 {
 	struct rtr_bgpsec *bgpsec = NULL;
 	struct rtr_bgpsec_nlri *pfx = NULL;
+    int pfx_len_b = 0;
 
 	struct rtr_signature_seg *rtr_ss = NULL;
 	struct rtr_secure_path_seg *rtr_sps = NULL;
@@ -1758,22 +1748,11 @@ static int gen_bgpsec_sig(struct peer *peer, struct bgpsec_aspath *bgpsecpath,
 
     /* Use RTRlib struct to store the prefix, AFI and length.
      * Store an IPv4/6 address according to the AFI. */
-    pfx = rtr_mgr_bgpsec_nlri_new();
-    pfx->prefix_len = p->prefixlen;
-    switch (afi) {
-    case AFI_IP:
-        pfx->prefix.ver = LRTR_IPV4;
-        pfx->prefix.u.addr4.addr = p->u.prefix4.s_addr;
-        break;
-    case AFI_IP6:
-        pfx->prefix.ver = LRTR_IPV6;
-        memcpy(&pfx->prefix.u.addr6.addr, &p->u.prefix6.s6_addr32,
-                sizeof(uint32_t) * 4);
-        break;
-    default:
-        /* Validity of AFI was already checked in build_bgpsec_aspath */
-        break;
-    }
+    pfx_len_b = (p->prefixlen + 7) / 8;
+    pfx = rtr_mgr_bgpsec_nlri_new(pfx_len_b);
+    pfx->nlri_len = p->prefixlen;
+    pfx->afi = afi;
+    memcpy(pfx->nlri, &p->u.prefix, pfx_len_b);
 
     alg = bgpsecpath->sigblock1->alg;
 
@@ -2117,15 +2096,23 @@ DEFUN (bgp_rpki_start,
        RPKI_OUTPUT_STRING
        "start rpki support\n")
 {
+    clock_t ticks_start, ticks_end = 0;
+
 	if (listcount(cache_list) == 0)
 		vty_out(vty,
 			"Could not start rpki because no caches are configured\n");
 
 	if (!is_running()) {
+        ticks_start = clock();
 		if (start() == ERROR) {
 			RPKI_DEBUG("RPKI failed to start");
 			return CMD_WARNING;
 		}
+        ticks_end = clock();
+        total_cpu_ticks_rpki_start += ticks_end - ticks_start;
+        zlog_debug("rpki_start,\
+                    duration (clock): %luus",
+                    ticks_end - ticks_start);
 	}
 	return CMD_SUCCESS;
 }

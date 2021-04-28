@@ -58,6 +58,9 @@
 #include "bgpd/bgp_label.h"
 #include "bgpd/bgp_addpath.h"
 
+static double total_cpu_ticks_attr_gen = 0;
+static int total_count_attr_gen = 0;
+
 /********************
  * PRIVATE FUNCTIONS
  ********************/
@@ -679,6 +682,11 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 	mpls_label_t label = MPLS_INVALID_LABEL, *label_pnt = NULL;
 	uint32_t num_labels = 0;
 
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+    clock_t ticks_start, ticks_end = 0;
+
 	if (!subgrp)
 		return NULL;
 
@@ -700,6 +708,8 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 
 	adv = bgp_adv_fifo_first(&subgrp->sync->update);
 	while (adv) {
+        /*GETRUSAGE(&before);*/
+        /*ticks_start = clock();*/
 		const struct prefix *dest_p;
 
 		assert(adv->dest);
@@ -763,11 +773,32 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 			 */
 			mpattr_pos = stream_get_endp(s);
 
+            /*GETRUSAGE(&before);*/
 			/* 5: Encode all the attributes, except MP_REACH_NLRI
 			 * attr. */
+            GETRUSAGE(&before);
 			total_attr_len = bgp_packet_attribute(
 				NULL, peer, s, adv->baa->attr, &vecarr, NULL,
 				afi, safi, from, NULL, NULL, 0, 0, 0, dest_p);
+
+            /*ticks_end = clock();*/
+            GETRUSAGE(&after);
+            thread_consumed_time(&after, &before, &helper);
+            cputime = helper;
+            total_count_attr_gen += 1;
+            total_cpu_ticks_attr_gen += cputime;
+            /*total_cpu_ticks_attr_gen += ticks_end - ticks_start;*/
+            /*if (total_count_attr_gen == 100) {*/
+                zlog_debug("subgroup_update_packet - count: %d,\
+                            duration (rusage): %luus,\
+                            total: %f,\
+                            average: %f",
+                           total_count_attr_gen, cputime,
+                           total_cpu_ticks_attr_gen,
+                           total_cpu_ticks_attr_gen / total_count_attr_gen);
+            /*}*/
+
+            /*GETRUSAGE(&after);*/
 
 			space_remaining =
 				STREAM_CONCAT_REMAIN(s, snlri, STREAM_SIZE(s))

@@ -42,6 +42,9 @@
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_memory.h"
 
+static double total_cpu_ticks = 0;
+static int total_count = 0;
+
 DEFINE_HOOK(bgp_put_bgpsec_cap, (struct stream *s, struct peer *peer), (s, peer))
 DEFINE_HOOK(bgp_capability_bgpsec, (struct peer *peer, struct capability_header *hdr), (peer, hdr))
 
@@ -1143,6 +1146,11 @@ int bgp_open_option_parse(struct peer *peer, uint8_t length, int *mp_capability)
 	struct stream *s = BGP_INPUT(peer);
 	size_t end = stream_get_getp(s) + length;
 
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+    clock_t ticks_start, ticks_end = 0;
+
 	error = error_data;
 
 	if (bgp_debug_neighbor_events(peer))
@@ -1192,8 +1200,21 @@ int bgp_open_option_parse(struct peer *peer, uint8_t length, int *mp_capability)
 			ret = bgp_auth_parse(peer, opt_length);
 			break;
 		case BGP_OPEN_OPT_CAP:
+            /*GETRUSAGE(&before);*/
+            /*ticks_start = clock();*/
 			ret = bgp_capability_parse(peer, opt_length,
 						   mp_capability, &error);
+            /*ticks_end = clock();*/
+            /*GETRUSAGE(&after);*/
+            /*thread_consumed_time(&after, &before, &helper);*/
+            /*cputime = helper;*/
+            /*total_count += 1;*/
+            /*total_cpu_ticks += cputime;*/
+            /*total_cpu_ticks += ticks_end - ticks_start;*/
+            /*zlog_debug("bgp_capability_parse - count: %d,\*/
+                        /*duration (clock): %lu,\*/
+                        /*average: %f",*/
+                       /*total_count, ticks_end - ticks_start, total_cpu_ticks / total_count);*/
 			break;
 		default:
 			bgp_notify_send(peer, BGP_NOTIFY_OPEN_ERR,

@@ -65,6 +65,15 @@
 #include "bgpd/bgp_flowspec.h"
 #include "bgpd/bgp_trace.h"
 
+static double total_cpu_ticks_attr_parse = 0;
+static int total_count_attr_parse = 0;
+
+static double total_cpu_ticks_attr_gen = 0;
+static int total_count_attr_gen = 0;
+
+static double total_cpu_ticks_open_cap = 0;
+static int total_count_open_cap = 0;
+
 DEFINE_HOOK(bgp_packet_dump,
 		(struct peer *peer, uint8_t type, bgp_size_t size,
 			struct stream *s),
@@ -395,6 +404,11 @@ int bgp_generate_updgrp_packets(struct thread *thread)
 	uint32_t generated = 0;
 	afi_t afi;
 	safi_t safi;
+    
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+    clock_t ticks_start, ticks_end = 0;
 
 	wpq = atomic_load_explicit(&peer->bgp->wpkt_quanta,
 				   memory_order_relaxed);
@@ -430,8 +444,21 @@ int bgp_generate_updgrp_packets(struct thread *thread)
 			if (!next_pkt || !next_pkt->buffer) {
 				next_pkt = subgroup_withdraw_packet(
 					PAF_SUBGRP(paf));
-				if (!next_pkt || !next_pkt->buffer)
+				if (!next_pkt || !next_pkt->buffer) {
+                    /*GETRUSAGE(&before);*/
+                    /*ticks_start = clock();*/
 					subgroup_update_packet(PAF_SUBGRP(paf));
+                    /*ticks_end = clock();*/
+                    /*GETRUSAGE(&after);*/
+                    /*thread_consumed_time(&after, &before, &helper);*/
+                    /*cputime = helper;*/
+                    /*total_count_attr_gen += 1;*/
+                    /*total_cpu_ticks_attr_gen += cputime;*/
+                    /*zlog_debug("subgroup_update_packet - count: %d,\*/
+                                /*duration (rusage): %luus,\*/
+                                /*average: %f",*/
+                               /*total_count_attr_gen, cputime, total_cpu_ticks_attr_gen / total_count_attr_gen);*/
+                }
 				next_pkt = paf->next_pkt_to_send;
 			}
 
@@ -574,6 +601,10 @@ void bgp_open_send(struct peer *peer)
 	struct stream *s;
 	uint16_t send_holdtime;
 	as_t local_as;
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+    clock_t ticks_start, ticks_end = 0;
 
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_TIMER))
 		send_holdtime = peer->holdtime;
@@ -599,7 +630,20 @@ void bgp_open_send(struct peer *peer)
 	stream_put_in_addr(s, &peer->local_id); /* BGP Identifier */
 
 	/* Set capability code. */
+    /*GETRUSAGE(&before);*/
+    ticks_start = clock();
 	bgp_open_capability(s, peer);
+    ticks_end = clock();
+    /*GETRUSAGE(&after);*/
+    /*thread_consumed_time(&after, &before, &helper);*/
+    /*cputime = helper;*/
+    total_count_open_cap += 1;
+    /*total_cpu_ticks_open_cap += cputime;*/
+    total_cpu_ticks_open_cap += ticks_end - ticks_start;
+    zlog_debug("bgp_open_capability - count: %d,\
+                duration (clock): %luus,\
+                average: %f",
+               total_count_open_cap, ticks_end - ticks_start, total_cpu_ticks_open_cap / total_count_open_cap);
 
 	/* Set BGP packet length. */
 	(void)bgp_packet_set_size(s);
@@ -1531,6 +1575,10 @@ static int bgp_update_receive(struct peer *peer, bgp_size_t size)
 	bgp_size_t update_len;
 	bgp_size_t withdraw_len;
 	bool restart = false;
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+    clock_t ticks_start, ticks_end = 0;
 
 	enum NLRI_TYPES {
 		NLRI_UPDATE,
@@ -1638,9 +1686,27 @@ static int bgp_update_receive(struct peer *peer, bgp_size_t size)
 
 	/* Parse attribute when it exists. */
 	if (attribute_len) {
+        ticks_start = clock();
+        /*GETRUSAGE(&before);*/
 		attr_parse_ret = bgp_attr_parse(peer, &attr, attribute_len,
 						&nlris[NLRI_MP_UPDATE],
 						&nlris[NLRI_MP_WITHDRAW]);
+        ticks_end = clock();
+        /*GETRUSAGE(&after);*/
+        /*thread_consumed_time(&after, &before, &helper);*/
+        /*cputime = helper;*/
+        total_count_attr_parse += 1;
+        /*total_cpu_ticks_attr_parse += cputime;*/
+        total_cpu_ticks_attr_parse += ticks_end - ticks_start;
+        if (total_count_attr_parse == 100) {
+            zlog_debug("bgp_attr_parse - count: %d,\
+                        duration (clock): %luus,\
+                        total: %f,\
+                        average: %f",
+                       total_count_attr_parse, ticks_end - ticks_start,
+                       total_cpu_ticks_attr_parse,
+                       total_cpu_ticks_attr_parse / total_count_attr_parse);
+        }
 		if (attr_parse_ret == BGP_ATTR_PARSE_ERROR) {
 			bgp_attr_unintern_sub(&attr);
 			return BGP_Stop;
