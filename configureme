@@ -9,5 +9,4 @@
             --disable-nhrpd \
             --enable-vty-group=frrvty \
             --enable-user=colin \
-            --enable-group=colin \
-            --enable-lttng=yes
+            --enable-group=colin
