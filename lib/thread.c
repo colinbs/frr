@@ -23,6 +23,10 @@
 #include <zebra.h>
 #include <sys/resource.h>
 
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
 #include "thread.h"
 #include "memory.h"
 #include "frrcu.h"
@@ -1785,7 +1789,8 @@ void thread_getrusage(RUSAGE_T *r)
 #endif
 	monotime(&r->real);
 #ifndef EXCLUDE_CPU_TIME
-	getrusage(FRR_RUSAGE, &(r->cpu));
+    /*getrusage(FRR_RUSAGE, &(r->cpu));*/
+    getrusage(RUSAGE_SELF, &(r->cpu));
 #endif
 }
 
