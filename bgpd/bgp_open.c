@@ -1149,7 +1149,6 @@ int bgp_open_option_parse(struct peer *peer, uint8_t length, int *mp_capability)
 	RUSAGE_T before, after;
 	_Atomic unsigned long cputime;
 	unsigned long helper;
-    clock_t ticks_start, ticks_end = 0;
 
 	error = error_data;
 
@@ -1200,21 +1199,8 @@ int bgp_open_option_parse(struct peer *peer, uint8_t length, int *mp_capability)
 			ret = bgp_auth_parse(peer, opt_length);
 			break;
 		case BGP_OPEN_OPT_CAP:
-            /*GETRUSAGE(&before);*/
-            /*ticks_start = clock();*/
 			ret = bgp_capability_parse(peer, opt_length,
 						   mp_capability, &error);
-            /*ticks_end = clock();*/
-            /*GETRUSAGE(&after);*/
-            /*thread_consumed_time(&after, &before, &helper);*/
-            /*cputime = helper;*/
-            /*total_count += 1;*/
-            /*total_cpu_ticks += cputime;*/
-            /*total_cpu_ticks += ticks_end - ticks_start;*/
-            /*zlog_debug("bgp_capability_parse - count: %d,\*/
-                        /*duration (clock): %lu,\*/
-                        /*average: %f",*/
-                       /*total_count, ticks_end - ticks_start, total_cpu_ticks / total_count);*/
 			break;
 		default:
 			bgp_notify_send(peer, BGP_NOTIFY_OPEN_ERR,

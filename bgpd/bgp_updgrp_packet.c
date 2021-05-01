@@ -1,6 +1,4 @@
 /**
- * bgp_updgrp_packet.c: BGP update group packet handling routines
- *
  * @copyright Copyright (C) 2014 Cumulus Networks, Inc.
  *
  * @author Avneesh Sachdev <avneesh@sproute.net>
@@ -25,6 +23,10 @@
  */
 
 #include <zebra.h>
+
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "prefix.h"
 #include "thread.h"
@@ -685,7 +687,6 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 	RUSAGE_T before, after;
 	_Atomic unsigned long cputime;
 	unsigned long helper;
-    clock_t ticks_start, ticks_end = 0;
 
 	if (!subgrp)
 		return NULL;
@@ -708,8 +709,6 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 
 	adv = bgp_adv_fifo_first(&subgrp->sync->update);
 	while (adv) {
-        /*GETRUSAGE(&before);*/
-        /*ticks_start = clock();*/
 		const struct prefix *dest_p;
 
 		assert(adv->dest);
@@ -773,7 +772,6 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 			 */
 			mpattr_pos = stream_get_endp(s);
 
-            /*GETRUSAGE(&before);*/
 			/* 5: Encode all the attributes, except MP_REACH_NLRI
 			 * attr. */
             GETRUSAGE(&before);
@@ -781,14 +779,12 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 				NULL, peer, s, adv->baa->attr, &vecarr, NULL,
 				afi, safi, from, NULL, NULL, 0, 0, 0, dest_p);
 
-            /*ticks_end = clock();*/
             GETRUSAGE(&after);
             thread_consumed_time(&after, &before, &helper);
             cputime = helper;
             total_count_attr_gen += 1;
             total_cpu_ticks_attr_gen += cputime;
-            /*total_cpu_ticks_attr_gen += ticks_end - ticks_start;*/
-            /*if (total_count_attr_gen == 100) {*/
+            if (total_count_attr_gen == 100) {
                 zlog_debug("subgroup_update_packet - count: %d,\
                             duration (rusage): %luus,\
                             total: %f,\
@@ -796,9 +792,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
                            total_count_attr_gen, cputime,
                            total_cpu_ticks_attr_gen,
                            total_cpu_ticks_attr_gen / total_count_attr_gen);
-            /*}*/
-
-            /*GETRUSAGE(&after);*/
+            }
 
 			space_remaining =
 				STREAM_CONCAT_REMAIN(s, snlri, STREAM_SIZE(s))

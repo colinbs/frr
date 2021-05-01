@@ -2096,23 +2096,15 @@ DEFUN (bgp_rpki_start,
        RPKI_OUTPUT_STRING
        "start rpki support\n")
 {
-    clock_t ticks_start, ticks_end = 0;
-
 	if (listcount(cache_list) == 0)
 		vty_out(vty,
 			"Could not start rpki because no caches are configured\n");
 
 	if (!is_running()) {
-        ticks_start = clock();
 		if (start() == ERROR) {
 			RPKI_DEBUG("RPKI failed to start");
 			return CMD_WARNING;
 		}
-        ticks_end = clock();
-        total_cpu_ticks_rpki_start += ticks_end - ticks_start;
-        zlog_debug("rpki_start,\
-                    duration (clock): %luus",
-                    ticks_end - ticks_start);
 	}
 	return CMD_SUCCESS;
 }

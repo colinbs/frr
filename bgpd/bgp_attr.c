@@ -20,6 +20,10 @@
 
 #include <zebra.h>
 
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
 #include "linklist.h"
 #include "prefix.h"
 #include "memory.h"
