@@ -784,7 +784,18 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
             cputime = helper;
             total_count_attr_gen += 1;
             total_cpu_ticks_attr_gen += cputime;
-            if (total_count_attr_gen == 100) {
+            if (total_count_attr_gen == 500 ||
+                total_count_attr_gen == 1000 ||
+                total_count_attr_gen == 1500 ||
+                total_count_attr_gen == 2000 ||
+                total_count_attr_gen == 2500 ||
+                total_count_attr_gen == 3000 ||
+                total_count_attr_gen == 3500 ||
+                total_count_attr_gen == 4000 ||
+                total_count_attr_gen == 3500 ||
+                total_count_attr_gen == 4000 ||
+                total_count_attr_gen == 4500 ||
+                total_count_attr_gen == 5000) {
                 zlog_debug("subgroup_update_packet - count: %d,\
                             duration (rusage): %luus,\
                             total: %f,\

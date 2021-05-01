@@ -1676,7 +1676,18 @@ static int bgp_update_receive(struct peer *peer, bgp_size_t size)
         cputime = helper;
         total_count_attr_parse += 1;
         total_cpu_ticks_attr_parse += cputime;
-        if (total_count_attr_parse == 100) {
+        if (total_count_attr_parse == 500 ||
+            total_count_attr_parse == 1000 ||
+            total_count_attr_parse == 1500 ||
+            total_count_attr_parse == 2000 ||
+            total_count_attr_parse == 2500 ||
+            total_count_attr_parse == 3000 ||
+            total_count_attr_parse == 3500 ||
+            total_count_attr_parse == 4000 ||
+            total_count_attr_parse == 3500 ||
+            total_count_attr_parse == 4000 ||
+            total_count_attr_parse == 4500 ||
+            total_count_attr_parse == 5000) {
             zlog_debug("bgp_attr_parse - count: %d,\
                         duration (rusage): %luus,\
                         total: %f,\
