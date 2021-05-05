@@ -78,6 +78,7 @@ static int show_memory_mallinfo(struct vty *vty)
 }
 #endif /* HAVE_MALLINFO */
 
+long unsigned int total = 0;
 static int qmem_walker(void *arg, struct memgroup *mg, struct memtype *mt)
 {
 	struct vty *vty = arg;
@@ -120,6 +121,21 @@ static int qmem_walker(void *arg, struct memgroup *mg, struct memtype *mt)
 				TARG,
 				mt->n_max
 				TARG2);
+
+            if (strcmp(mt->name, "BGP BGPsec PATH") == 0 ||
+                strcmp(mt->name, "BGP BGPsec signature segment") == 0 ||
+                strcmp(mt->name, "BGP BGPsec signature") == 0 ||
+                strcmp(mt->name, "BGP BGPsec signature block") == 0 ||
+                strcmp(mt->name, "BGP BGPsec secure path segment") == 0 ||
+                strcmp(mt->name, "BGP BGPsec PATH string") == 0 ||
+                strcmp(mt->name, "BGP BGPsec NLRI") == 0)
+            {
+                total += mt->total;
+                if (strcmp(mt->name, "BGP BGPsec NLRI") == 0) {
+                    vty_out(vty, "%-30s: %ld: \n", "BGPsec Total", total);
+                }
+            }
+
 		}
 	}
 	return 0;
