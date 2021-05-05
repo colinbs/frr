@@ -910,6 +910,7 @@ static int build_bgpsec_aspath(struct bgp *bgp,
 	size_t aspath_sizep = 0;
     int rtval = 0;
     int sig_only = 0;
+    int origin = 0;
 
     /* Only valid AFI for BGPsec are IPv4 and IPv6 */
     if (afi != AFI_IP && afi != AFI_IP6) {
@@ -974,6 +975,7 @@ static int build_bgpsec_aspath(struct bgp *bgp,
         bgpsec_aspath_free(tmp_path);
         /*aspath = copy_bgpsecpath(attr->bgpsecpath);*/
     } else {
+        origin = 1;
         aspath = bgpsec_aspath_new();
     }
 
@@ -1003,8 +1005,10 @@ static int build_bgpsec_aspath(struct bgp *bgp,
 
     bgpsec_sps_free(own_sps);
     bgpsec_ss_free(own_ss);
-    /*bgpsec_aspath_free(aspath);*/
-    /*aspath = NULL;*/
+    if (origin) {
+        bgpsec_aspath_free(aspath);
+        aspath = NULL;
+    }
 
     return rtval;
 }
