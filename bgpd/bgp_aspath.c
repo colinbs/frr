@@ -2488,7 +2488,7 @@ bool bgpsec_aspath_cmp(const void *arg1, const void *arg2)
 struct bgpsec_aspath *bgpsec_aspath_new(void)
 {
     struct bgpsec_aspath *aspath =
-        XCALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_aspath));
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_aspath));
 
     aspath->refcnt = 0;
     aspath->next = NULL;
