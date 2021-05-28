@@ -22,6 +22,7 @@
 
 #include <zebra.h>
 #include <sys/time.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <unistd.h>

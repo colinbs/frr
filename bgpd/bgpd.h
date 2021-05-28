@@ -1196,14 +1196,14 @@ struct peer {
 #define PEER_CAP_ENHANCED_RR_RCV (1U << 18) /* enhanced rr received */
 #define PEER_CAP_EXTENDED_MESSAGE_ADV (1U << 19)
 #define PEER_CAP_EXTENDED_MESSAGE_RCV (1U << 20)
-#define PEER_CAP_BGPSEC_SEND_IPV4_ADV       (1U << 19) /* bgpsec send IPv4 advertised */
-#define PEER_CAP_BGPSEC_SEND_IPV6_ADV       (1U << 20) /* bgpsec send IPv6 advertised */
-#define PEER_CAP_BGPSEC_SEND_IPV4_RCV       (1U << 21) /* bgpsec send IPv4 received */
-#define PEER_CAP_BGPSEC_SEND_IPV6_RCV       (1U << 22) /* bgpsec send IPv6 received */
-#define PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV    (1U << 23) /* bgpsec receive IPv4 advertised */
-#define PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV    (1U << 24) /* bgpsec receive IPv6 advertised */
-#define PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV    (1U << 25) /* bgpsec receive IPv4 received */
-#define PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV    (1U << 26) /* bgpsec receive IPv6 received */
+#define PEER_CAP_BGPSEC_SEND_IPV4_ADV       (1U << 21) /* bgpsec send IPv4 advertised */
+#define PEER_CAP_BGPSEC_SEND_IPV6_ADV       (1U << 22) /* bgpsec send IPv6 advertised */
+#define PEER_CAP_BGPSEC_SEND_IPV4_RCV       (1U << 23) /* bgpsec send IPv4 received */
+#define PEER_CAP_BGPSEC_SEND_IPV6_RCV       (1U << 24) /* bgpsec send IPv6 received */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV    (1U << 25) /* bgpsec receive IPv4 advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV    (1U << 26) /* bgpsec receive IPv6 advertised */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV    (1U << 27) /* bgpsec receive IPv4 received */
+#define PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV    (1U << 28) /* bgpsec receive IPv6 received */
 
 	/* Capability flags (reset in bgp_stop) */
 	uint32_t af_cap[AFI_MAX][SAFI_MAX];
@@ -1318,13 +1318,11 @@ struct peer {
 	 *and PEER_FLAG_GRACEFUL_RESTART_GLOBAL_INHERIT
 	 */
 
-#define PEER_FLAG_TIMER_DELAYOPEN (1 << 27) /* delayopen timer */
-
 	/* BGPsec Peer related  flags */
-#define PEER_FLAG_BGPSEC_SEND_IPV4          (1 << 28) /* bgpsec send IPv4 */
-#define PEER_FLAG_BGPSEC_SEND_IPV6          (1 << 29) /* bgpsec send IPv6 */
-#define PEER_FLAG_BGPSEC_RECEIVE_IPV4       (1 << 30) /* bgpsec receive IPv4 */
-#define PEER_FLAG_BGPSEC_RECEIVE_IPV6       (1 << 31) /* bgpsec receive IPv6 */
+#define PEER_FLAG_BGPSEC_SEND_IPV4          (1U << 29) /* bgpsec send IPv4 */
+#define PEER_FLAG_BGPSEC_SEND_IPV6          (1U << 30) /* bgpsec send IPv6 */
+#define PEER_FLAG_BGPSEC_RECEIVE_IPV4       (1U << 31) /* bgpsec receive IPv4 */
+#define PEER_FLAG_BGPSEC_RECEIVE_IPV6       (1U << 32) /* bgpsec receive IPv6 */
 
 	struct bgp_peer_gr PEER_GR_FSM[BGP_PEER_GR_MODE][BGP_PEER_GR_EVENT_CMD];
 	enum peer_mode peer_gr_present_state;
@@ -2485,7 +2483,7 @@ DECLARE_HOOK(bgp_rpki_prefix_status,
 	      const struct prefix *prefix),
 	     (peer, attr, prefix));
 
-DECLARE_HOOK(bgp_bgpsec_cleanup, (struct bgp *bgp), (bgp))
+DECLARE_HOOK(bgp_bgpsec_cleanup, (struct bgp *bgp), (bgp));
 void peer_nsf_stop(struct peer *peer);
 
 void peer_tcp_mss_set(struct peer *peer, uint32_t tcp_mss);
