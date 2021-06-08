@@ -683,6 +683,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 	struct prefix_rd *prd = NULL;
 	mpls_label_t label = MPLS_INVALID_LABEL, *label_pnt = NULL;
 	uint32_t num_labels = 0;
+    unsigned int is_bgpsec = 0;
 
 	RUSAGE_T before, after;
 	_Atomic unsigned long cputime;
@@ -706,6 +707,8 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 
 	addpath_encode = bgp_addpath_encode_tx(peer, afi, safi);
 	addpath_overhead = addpath_encode ? BGP_ADDPATH_ID_LEN : 0;
+
+    is_bgpsec = is_bgpsec_peer(peer);
 
 	adv = bgp_adv_fifo_first(&subgrp->sync->update);
 	while (adv) {
@@ -784,7 +787,8 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
             cputime = helper;
             total_count_attr_gen += 1;
             total_cpu_ticks_attr_gen += cputime;
-            if (total_count_attr_gen == 500 ||
+            if (total_count_attr_gen == 1 ||
+                total_count_attr_gen == 500 ||
                 total_count_attr_gen == 1000 ||
                 total_count_attr_gen == 1500 ||
                 total_count_attr_gen == 2000 ||
@@ -914,8 +918,40 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 		adj->attr = bgp_attr_intern(adv->baa->attr);
 next:
 
-        // TODO: reset s if BGPsec is active to make sure that
-        // another packet will be build.
+        if (is_bgpsec) {
+            // TODO: reset s if BGPsec is active to make sure that
+            // another packet will be build.
+            if (!stream_empty(s)) {
+                if (!stream_empty(snlri)) {
+                    bgp_packet_mpattr_end(snlri, mpattrlen_pos);
+                    total_attr_len += stream_get_endp(snlri);
+                }
+
+                /* set the total attribute length correctly */
+                stream_putw_at(s, attrlen_pos, total_attr_len);
+
+                if (!stream_empty(snlri)) {
+                    packet = stream_dupcat(s, snlri, mpattr_pos);
+                    bpacket_attr_vec_arr_update(&vecarr, mpattr_pos);
+                } else
+                    packet = stream_dup(s);
+                bgp_packet_set_size(packet);
+                if (bgp_debug_update(NULL, NULL, subgrp->update_group, 0))
+                    zlog_debug("u%" PRIu64 ":s%" PRIu64" send UPDATE len %zd numpfx %d",
+                           subgrp->update_group->id, subgrp->id,
+                           (stream_get_endp(packet)
+                            - stream_get_getp(packet)),
+                           num_pfx);
+                pkt = bpacket_queue_add(SUBGRP_PKTQ(subgrp), packet, &vecarr);
+                stream_reset(s);
+                stream_reset(snlri);
+            }
+        }
+
+		adv = bgp_advertise_clean_subgroup(subgrp, adj);
+	}
+
+    if (!is_bgpsec) {
         if (!stream_empty(s)) {
             if (!stream_empty(snlri)) {
                 bgp_packet_mpattr_end(snlri, mpattrlen_pos);
@@ -941,11 +977,18 @@ next:
             stream_reset(s);
             stream_reset(snlri);
         }
-
-		adv = bgp_advertise_clean_subgroup(subgrp, adj);
-	}
+    }
 
 	return NULL;
+}
+
+unsigned int is_bgpsec_peer(struct peer *peer)
+{
+	if (CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV)
+	    || CHECK_FLAG(peer->cap, PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV)) {
+        return 1;
+    }
+    return 0;
 }
 
 /* Make BGP withdraw packet.  */
