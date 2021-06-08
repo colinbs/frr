@@ -781,7 +781,8 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
             cputime = helper;
             total_count_attr_gen += 1;
             total_cpu_ticks_attr_gen += cputime;
-            if (total_count_attr_gen == 500 ||
+            if (total_count_attr_gen == 1 ||
+                total_count_attr_gen == 500 ||
                 total_count_attr_gen == 1000 ||
                 total_count_attr_gen == 1500 ||
                 total_count_attr_gen == 2000 ||
