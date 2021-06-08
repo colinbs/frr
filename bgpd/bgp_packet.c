@@ -65,6 +65,12 @@
 #include "bgpd/bgp_flowspec.h"
 #include "bgpd/bgp_trace.h"
 
+static double total_cpu_ticks_attr_parse = 0;
+static int total_count_attr_parse = 0;
+
+static double total_cpu_ticks_open_cap = 0;
+static int total_count_open_cap = 0;
+
 DEFINE_HOOK(bgp_packet_dump,
 		(struct peer *peer, uint8_t type, bgp_size_t size,
 			struct stream *s),
@@ -575,6 +581,10 @@ void bgp_open_send(struct peer *peer)
 	uint16_t send_holdtime;
 	as_t local_as;
 
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_TIMER))
 		send_holdtime = peer->holdtime;
 	else
@@ -599,7 +609,17 @@ void bgp_open_send(struct peer *peer)
 	stream_put_in_addr(s, &peer->local_id); /* BGP Identifier */
 
 	/* Set capability code. */
+    GETRUSAGE(&before);
 	bgp_open_capability(s, peer);
+    GETRUSAGE(&after);
+    thread_consumed_time(&after, &before, &helper);
+    cputime = helper;
+    total_count_open_cap += 1;
+    total_cpu_ticks_open_cap += cputime;
+    zlog_debug("bgp_open_capability - count: %d,\
+                duration (rusage): %luus,\
+                average: %f",
+               total_count_open_cap, cputime, total_cpu_ticks_open_cap / total_count_open_cap);
 
 	/* Set BGP packet length. */
 	(void)bgp_packet_set_size(s);
@@ -1532,6 +1552,10 @@ static int bgp_update_receive(struct peer *peer, bgp_size_t size)
 	bgp_size_t withdraw_len;
 	bool restart = false;
 
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+
 	enum NLRI_TYPES {
 		NLRI_UPDATE,
 		NLRI_WITHDRAW,
@@ -1638,9 +1662,35 @@ static int bgp_update_receive(struct peer *peer, bgp_size_t size)
 
 	/* Parse attribute when it exists. */
 	if (attribute_len) {
+        GETRUSAGE(&before);
 		attr_parse_ret = bgp_attr_parse(peer, &attr, attribute_len,
 						&nlris[NLRI_MP_UPDATE],
 						&nlris[NLRI_MP_WITHDRAW]);
+        GETRUSAGE(&after);
+        thread_consumed_time(&after, &before, &helper);
+        cputime = helper;
+        total_count_attr_parse += 1;
+        total_cpu_ticks_attr_parse += cputime;
+        if (total_count_attr_parse == 500 ||
+            total_count_attr_parse == 1000 ||
+            total_count_attr_parse == 1500 ||
+            total_count_attr_parse == 2000 ||
+            total_count_attr_parse == 2500 ||
+            total_count_attr_parse == 3000 ||
+            total_count_attr_parse == 3500 ||
+            total_count_attr_parse == 4000 ||
+            total_count_attr_parse == 3500 ||
+            total_count_attr_parse == 4000 ||
+            total_count_attr_parse == 4500 ||
+            total_count_attr_parse == 5000) {
+            zlog_debug("bgp_attr_parse - count: %d,\
+                        duration (rusage): %luus,\
+                        total: %f,\
+                        average: %f",
+                       total_count_attr_parse, cputime,
+                       total_cpu_ticks_attr_parse,
+                       total_cpu_ticks_attr_parse / total_count_attr_parse);
+        }
 		if (attr_parse_ret == BGP_ATTR_PARSE_ERROR) {
 			bgp_attr_unintern_sub(&attr);
 			return BGP_Stop;

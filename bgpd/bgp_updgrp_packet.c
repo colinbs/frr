@@ -58,6 +58,9 @@
 #include "bgpd/bgp_label.h"
 #include "bgpd/bgp_addpath.h"
 
+static double total_cpu_ticks_attr_gen = 0;
+static int total_count_attr_gen = 0;
+
 /********************
  * PRIVATE FUNCTIONS
  ********************/
@@ -679,6 +682,10 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 	mpls_label_t label = MPLS_INVALID_LABEL, *label_pnt = NULL;
 	uint32_t num_labels = 0;
 
+	RUSAGE_T before, after;
+	_Atomic unsigned long cputime;
+	unsigned long helper;
+
 	if (!subgrp)
 		return NULL;
 
@@ -765,9 +772,35 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 
 			/* 5: Encode all the attributes, except MP_REACH_NLRI
 			 * attr. */
+            GETRUSAGE(&before);
 			total_attr_len = bgp_packet_attribute(
 				NULL, peer, s, adv->baa->attr, &vecarr, NULL,
 				afi, safi, from, NULL, NULL, 0, 0, 0);
+            GETRUSAGE(&after);
+            thread_consumed_time(&after, &before, &helper);
+            cputime = helper;
+            total_count_attr_gen += 1;
+            total_cpu_ticks_attr_gen += cputime;
+            if (total_count_attr_gen == 500 ||
+                total_count_attr_gen == 1000 ||
+                total_count_attr_gen == 1500 ||
+                total_count_attr_gen == 2000 ||
+                total_count_attr_gen == 2500 ||
+                total_count_attr_gen == 3000 ||
+                total_count_attr_gen == 3500 ||
+                total_count_attr_gen == 4000 ||
+                total_count_attr_gen == 3500 ||
+                total_count_attr_gen == 4000 ||
+                total_count_attr_gen == 4500 ||
+                total_count_attr_gen == 5000) {
+                zlog_debug("subgroup_update_packet - count: %d,\
+                            duration (rusage): %luus,\
+                            total: %f,\
+                            average: %f",
+                           total_count_attr_gen, cputime,
+                           total_cpu_ticks_attr_gen,
+                           total_cpu_ticks_attr_gen / total_count_attr_gen);
+            }
 
 			space_remaining =
 				STREAM_CONCAT_REMAIN(s, snlri, STREAM_SIZE(s))

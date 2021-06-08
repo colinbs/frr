@@ -1785,7 +1785,7 @@ void thread_getrusage(RUSAGE_T *r)
 #endif
 	monotime(&r->real);
 #ifndef EXCLUDE_CPU_TIME
-	getrusage(FRR_RUSAGE, &(r->cpu));
+	getrusage(RUSAGE_SELF, &(r->cpu));
 #endif
 }
 
