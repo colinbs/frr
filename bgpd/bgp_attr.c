@@ -63,24 +63,24 @@
 DEFINE_HOOK(bgp_attr_bgpsec_path,
             (struct bgp_attr_parser_args *args,
             struct bgp_nlri *mp_update),
-            (args, mp_update))
+            (args, mp_update));
 
 DEFINE_HOOK(bgp_packet_build_bgpsec_aspath,
             (struct bgp *bgp, struct peer *peer, struct stream *s,
             struct attr *attr, const struct prefix *bgpsec_p,
             afi_t afi, safi_t safi),
-            (bgp, peer, s, attr, bgpsec_p, afi, safi))
+            (bgp, peer, s, attr, bgpsec_p, afi, safi));
 
 DEFINE_HOOK(bgp_val_bgpsec_aspath,
             (struct attr *attr,
             struct peer *peer,
             struct bgp_nlri *mp_update),
-            (attr, peer, mp_update))
+            (attr, peer, mp_update));
 
 DEFINE_HOOK(bgp_copy_mp_update,
             (struct attr *attr,
             struct bgp_nlri *mp_update),
-            (attr, mp_update))
+            (attr, mp_update));
 
 /* Attribute strings for logging. */
 static const struct message attr_str[] = {

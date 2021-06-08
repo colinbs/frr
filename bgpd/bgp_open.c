@@ -45,8 +45,8 @@
 static double total_cpu_ticks = 0;
 static int total_count = 0;
 
-DEFINE_HOOK(bgp_put_bgpsec_cap, (struct stream *s, struct peer *peer), (s, peer))
-DEFINE_HOOK(bgp_capability_bgpsec, (struct peer *peer, struct capability_header *hdr), (peer, hdr))
+DEFINE_HOOK(bgp_put_bgpsec_cap, (struct stream *s, struct peer *peer), (s, peer));
+DEFINE_HOOK(bgp_capability_bgpsec, (struct peer *peer, struct capability_header *hdr), (peer, hdr));
 
 /* BGP-4 Multiprotocol Extentions lead us to the complex world. We can
    negotiate remote peer supports extentions or not. But if

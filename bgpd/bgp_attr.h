@@ -559,23 +559,23 @@ bgp_attr_set_vnc_subtlvs(struct attr *attr,
 DECLARE_HOOK(bgp_attr_bgpsec_path,
             (struct bgp_attr_parser_args *args,
             struct bgp_nlri *mp_update),
-            (args, mp_update))
+            (args, mp_update));
 
 DECLARE_HOOK(bgp_packet_build_bgpsec_aspath,
             (struct bgp *bgp, struct peer *peer, struct stream *s,
             struct attr *attr, const struct prefix *bgpsec_p,
             afi_t afi, safi_t safi),
-            (bgp, peer, s, attr, bgpsec_p, afi, safi))
+            (bgp, peer, s, attr, bgpsec_p, afi, safi));
 
 DECLARE_HOOK(bgp_val_bgpsec_aspath,
             (struct attr *attr,
             struct peer *peer,
             struct bgp_nlri *mp_update),
-            (attr, peer, mp_update))
+            (attr, peer, mp_update));
 
 DECLARE_HOOK(bgp_copy_mp_update,
             (struct attr *attr,
             struct bgp_nlri *mp_update),
-            (attr, mp_update))
+            (attr, mp_update));
 
 #endif /* _QUAGGA_BGP_ATTR_H */
