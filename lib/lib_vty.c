@@ -348,7 +348,7 @@ const char *mtype_memstr(char *buf, size_t len, unsigned long bytes)
 	m = bytes >> 20;
 	k = bytes >> 10;
 
-	if (m > 10) {
+	if (m > 40) {
 		if (bytes & (1 << 19))
 			m++;
 		snprintf(buf, len, "%d MiB", m);
