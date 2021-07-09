@@ -99,6 +99,8 @@
 #define BGPSEC_OUTPUT_STRING "Control BGPsec specific settings\n"
 
 static double total_cpu_ticks_rpki_start = 0;
+static double total_cpu_ticks_attr_parse = 0;
+static int total_count_attr_parse = 0;
 
 struct cache {
 	enum { TCP, SSH } type;
@@ -981,8 +983,38 @@ static int build_bgpsec_aspath(struct bgp *bgp,
      * This saves stripping the path data from the stream again, in case
      * the signature could not be generated.
      */
+    RUSAGE_T before, after;
+    _Atomic unsigned long cputime;
+    unsigned long helper;
+    GETRUSAGE(&before);
     rtval = gen_bgpsec_sig(peer, aspath, bgp, bgpsec_p, afi, safi,
                            own_sps, &own_ss);
+    GETRUSAGE(&after);
+    thread_consumed_time(&after, &before, &helper);
+    cputime = helper;
+    total_count_attr_parse += 1;
+    total_cpu_ticks_attr_parse += cputime;
+    if (total_count_attr_parse == 1 ||
+        total_count_attr_parse == 500 ||
+        total_count_attr_parse == 1000 ||
+        total_count_attr_parse == 1500 ||
+        total_count_attr_parse == 2000 ||
+        total_count_attr_parse == 2500 ||
+        total_count_attr_parse == 3000 ||
+        total_count_attr_parse == 3500 ||
+        total_count_attr_parse == 4000 ||
+        total_count_attr_parse == 3500 ||
+        total_count_attr_parse == 4000 ||
+        total_count_attr_parse == 4500 ||
+        total_count_attr_parse == 5000) {
+        zlog_debug("sign - count: %d,\
+                    duration (rusage): %luus,\
+                    total: %f,\
+                    average: %f",
+                   total_count_attr_parse, cputime,
+                   total_cpu_ticks_attr_parse,
+                   total_cpu_ticks_attr_parse / total_count_attr_parse);
+    }
 
     if (own_ss && rtval == 0) {
         stream_putc(s, BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_EXTLEN);

@@ -60,6 +60,9 @@
 #include "bgp_flowspec_private.h"
 #include "bgp_mac.h"
 
+static double total_cpu_ticks_attr_parse = 0;
+static int total_count_attr_parse = 0;
+
 DEFINE_HOOK(bgp_attr_bgpsec_path,
             (struct bgp_attr_parser_args *args,
             struct bgp_nlri *mp_update),
@@ -3371,7 +3374,37 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
         if (mp_update) {
             ret = hook_call(bgp_copy_mp_update, attr, mp_update);
             if (ret == 0) {
+                RUSAGE_T before, after;
+                _Atomic unsigned long cputime;
+                unsigned long helper;
+                GETRUSAGE(&before);
                 ret = hook_call(bgp_val_bgpsec_aspath, attr, peer, mp_update);
+                GETRUSAGE(&after);
+                thread_consumed_time(&after, &before, &helper);
+                cputime = helper;
+                total_count_attr_parse += 1;
+                total_cpu_ticks_attr_parse += cputime;
+                if (total_count_attr_parse == 1 ||
+                    total_count_attr_parse == 500 ||
+                    total_count_attr_parse == 1000 ||
+                    total_count_attr_parse == 1500 ||
+                    total_count_attr_parse == 2000 ||
+                    total_count_attr_parse == 2500 ||
+                    total_count_attr_parse == 3000 ||
+                    total_count_attr_parse == 3500 ||
+                    total_count_attr_parse == 4000 ||
+                    total_count_attr_parse == 3500 ||
+                    total_count_attr_parse == 4000 ||
+                    total_count_attr_parse == 4500 ||
+                    total_count_attr_parse == 5000) {
+                    zlog_debug("validate - count: %d,\
+                                duration (rusage): %luus,\
+                                total: %f,\
+                                average: %f",
+                               total_count_attr_parse, cputime,
+                               total_cpu_ticks_attr_parse,
+                               total_cpu_ticks_attr_parse / total_count_attr_parse);
+                }
                 /* Anything execpt a valid BGPsec AS path will result in
                  * AS_PATH reconstruction.
                  */
