@@ -651,6 +651,70 @@ static struct test_segment misc_segments[] =
 		},
 		{NULL, NULL, {0}, 0, 0}};
 
+static struct test_segment bgpsec_segments[] = {
+	{
+		"BGPsec-recv-v4",
+		"BGPsec Receive Capability for IPv4",
+		{
+			CAPABILITY_CODE_BGPSEC, /* cap code */
+			0x3,			/* cap length */
+			0x0,			/* version and direction (receive) */
+			0x0, 0x1,		/* IPv4 AFI */
+		},
+		5,
+		SHOULD_PARSE,
+	},
+	{
+		"BGPsec-send-v4",
+		"BGPsec Send Capability for IPv4",
+		{
+			CAPABILITY_CODE_BGPSEC, /* cap code */
+			0x3,			/* cap length */
+			0x8,			/* version and direction (send) */
+			0x0, 0x1,		/* IPv4 AFI */
+		},
+		5,
+		SHOULD_PARSE,
+	},
+	{
+		"BGPsec-recv-v6",
+		"BGPsec Receive Capability for IPv6",
+		{
+			CAPABILITY_CODE_BGPSEC, /* cap code */
+			0x3,			/* cap length */
+			0x0,			/* version and direction (receive) */
+			0x0, 0x2,		/* IPv6 AFI */
+		},
+		5,
+		SHOULD_PARSE,
+	},
+	{
+		"BGPsec-send-v6",
+		"BGPsec Send Capability for IPv6",
+		{
+			CAPABILITY_CODE_BGPSEC, /* cap code */
+			0x3,			/* cap length */
+			0x8,			/* version and direction (send) */
+			0x0, 0x2,		/* IPv6 AFI */
+		},
+		5,
+		SHOULD_PARSE,
+	},
+	{
+		"BGPsec-invalid-afi",
+		"BGPsec invalid AFI",
+		{
+			CAPABILITY_CODE_BGPSEC, /* cap code */
+			0x3,			/* cap length */
+			0x8,			/* version and direction (send) */
+			INVALID_AFI,	/* invalid AFI to BGPsec */
+		},
+		5,
+		SHOULD_PARSE,
+	},
+	{NULL, NULL, {0}, 0, 0}
+};
+
 /* DYNAMIC message */
 struct test_segment dynamic_cap_msgs[] = {
 	{
@@ -951,6 +1015,10 @@ int main(void)
 	i = 0;
 	while (misc_segments[i].name)
 		parse_test(peer, &misc_segments[i++], CAPABILITY);
+
+	i = 0;
+	while (bgpsec_segments[i].name)
+		parse_test(peer, &bgpsec_segments[i++], CAPABILITY);
 
 	i = 0;
 	while (opt_params[i].name)

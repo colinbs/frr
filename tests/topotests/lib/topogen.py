@@ -789,8 +789,9 @@ class TopoRouter(TopoGear):
         self.logger.info('check capability {} for "{}"'.format(param, daemonstr))
         return self.net.checkCapability(daemonstr, param)
 
-    def load_config(self, daemon, source=None, param=None):
-        """Loads daemon configuration from the specified source
+    def load_config(self, daemon, source=None, param=None, privkey=None):
+        """
+        Loads daemon configuration from the specified source
         Possible daemon values are: TopoRouter.RD_ZEBRA, TopoRouter.RD_RIP,
         TopoRouter.RD_RIPNG, TopoRouter.RD_OSPF, TopoRouter.RD_OSPF6,
         TopoRouter.RD_ISIS, TopoRouter.RD_BGP, TopoRouter.RD_LDP,
@@ -805,7 +806,7 @@ class TopoRouter(TopoGear):
         """
         daemonstr = self.RD.get(daemon)
         self.logger.info('loading "{}" configuration: {}'.format(daemonstr, source))
-        self.net.loadConf(daemonstr, source, param)
+        self.net.loadConf(daemonstr, source, param, privkey)
 
     def check_router_running(self):
         """

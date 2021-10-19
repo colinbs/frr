@@ -1500,7 +1500,7 @@ class Router(Node):
                 return False
         return True
 
-    def loadConf(self, daemon, source=None, param=None):
+    def loadConf(self, daemon, source=None, param=None, privkey=None):
         """Enabled and set config for a daemon.
 
         Arranges for loading of daemon configuration from the specified source. Possible
@@ -1534,6 +1534,16 @@ class Router(Node):
                 self.cmd_raises("cp {} {}".format(source, conf_file))
             self.cmd_raises("chown {0}:{0} {1}".format(self.routertype, conf_file))
             self.cmd_raises("chmod 664 {}".format(conf_file))
+            if privkey:
+                self.cmd("cp %s /etc/%s/%s.der" % (privkey, self.routertype, "privkey"))
+                self.waitOutput()
+                self.cmd("chmod 640 /etc/%s/%s.der" % (self.routertype, "privkey"))
+                self.waitOutput()
+                self.cmd(
+                    "chown %s:%s /etc/%s/%s.der"
+                    % (self.routertype, self.routertype, self.routertype, "privkey")
+                )
+                self.waitOutput()
             if (daemon == "snmpd") and (self.routertype == "frr"):
                 # /etc/snmp is private mount now
                 self.cmd('echo "agentXSocket /etc/frr/agentx" > /etc/snmp/frr.conf')
