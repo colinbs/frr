@@ -3528,6 +3528,13 @@ bool bgp_update_martian_nexthop(struct bgp *bgp, afi_t afi, safi_t safi,
 		case BGP_ATTR_NHLEN_VPNV6_GLOBAL:
 			ret = (IN6_IS_ADDR_UNSPECIFIED(
 					&attr->mp_nexthop_global)
+				&& !is_bgp_static_route);
+			ret = (IN6_IS_ADDR_UNSPECIFIED(
+					&attr->mp_nexthop_global));
+            ret = IN6_IS_ADDR_UNSPECIFIED(&attr->mp_nexthop_global);
+            ret = IN6_IS_ADDR_LOOPBACK(&attr->mp_nexthop_global);
+            ret = IN6_IS_ADDR_MULTICAST(&attr->mp_nexthop_global);
+			ret = (IN6_IS_ADDR_UNSPECIFIED(&attr->mp_nexthop_global)
 			       || IN6_IS_ADDR_LOOPBACK(&attr->mp_nexthop_global)
 			       || IN6_IS_ADDR_MULTICAST(
 				       &attr->mp_nexthop_global)

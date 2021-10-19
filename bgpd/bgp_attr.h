@@ -35,6 +35,13 @@
 #define CHECK_BITMAP(MAP, NUM)                                                 \
 	CHECK_FLAG(MAP[(NUM) / BITMAP_NBBY], 1 << ((NUM) % BITMAP_NBBY))
 
+#define SEC_PATH_LEN(seg, idx)                                                 \
+	struct bgpsec_secpath *tmp = seg;                                          \
+	while (tmp) {                                                              \
+		idx++;                                                                 \
+		tmp = tmp->next;                                                       \
+	}
+
 #define BGP_MED_MAX UINT32_MAX
 
 /* BGP Attribute type range. */
@@ -334,6 +341,9 @@ struct attr {
 
 	/* If NEXTHOP_TYPE_BLACKHOLE, then blackhole type */
 	enum blackhole_type bh_type;
+
+	/* BGPsec_PATH */
+	struct bgpsec_aspath *bgpsecpath;
 };
 
 /* rmap_change_flags definition */
@@ -405,7 +415,8 @@ extern bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *,
 				       struct bpacket_attr_vec_arr *vecarr,
 				       struct prefix *, afi_t, safi_t,
 				       struct peer *, struct prefix_rd *,
-				       mpls_label_t *, uint32_t, int, uint32_t);
+				       mpls_label_t *, uint32_t, int, uint32_t,
+                       const struct prefix *bgpsec_p);
 extern void bgp_dump_routes_attr(struct stream *s, struct attr *attr,
 				 const struct prefix *p);
 extern bool attrhash_cmp(const void *arg1, const void *arg2);
@@ -569,5 +580,29 @@ bgp_attr_set_vnc_subtlvs(struct attr *attr,
 	attr->vnc_subtlvs = vnc_subtlvs;
 #endif
 }
+
+#include "hook.h"
+#include "bgp_aspath.h"
+DECLARE_HOOK(bgp_attr_bgpsec_path,
+            (struct bgp_attr_parser_args *args,
+            struct bgp_nlri *mp_update),
+            (args, mp_update));
+
+DECLARE_HOOK(bgp_packet_build_bgpsec_aspath,
+            (struct bgp *bgp, struct peer *peer, struct stream *s,
+            struct attr *attr, const struct prefix *bgpsec_p,
+            afi_t afi, safi_t safi),
+            (bgp, peer, s, attr, bgpsec_p, afi, safi));
+
+DECLARE_HOOK(bgp_val_bgpsec_aspath,
+            (struct attr *attr,
+            struct peer *peer,
+            struct bgp_nlri *mp_update),
+            (attr, peer, mp_update));
+
+DECLARE_HOOK(bgp_copy_mp_update,
+            (struct attr *attr,
+            struct bgp_nlri *mp_update),
+            (attr, mp_update));
 
 #endif /* _QUAGGA_BGP_ATTR_H */

@@ -440,8 +440,9 @@ int bgp_generate_updgrp_packets(struct thread *thread)
 			if (!next_pkt || !next_pkt->buffer) {
 				next_pkt = subgroup_withdraw_packet(
 					PAF_SUBGRP(paf));
-				if (!next_pkt || !next_pkt->buffer)
+				if (!next_pkt || !next_pkt->buffer) {
 					subgroup_update_packet(PAF_SUBGRP(paf));
+                }
 				next_pkt = paf->next_pkt_to_send;
 			}
 

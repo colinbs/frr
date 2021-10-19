@@ -42,6 +42,9 @@
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_memory.h"
 
+DEFINE_HOOK(bgp_put_bgpsec_cap, (struct stream *s, struct peer *peer), (s, peer));
+DEFINE_HOOK(bgp_capability_bgpsec, (struct peer *peer, struct capability_header *hdr), (peer, hdr));
+
 /* BGP-4 Multiprotocol Extentions lead us to the complex world. We can
    negotiate remote peer supports extentions or not. But if
    remote-peer doesn't supports negotiation process itself.  We would
@@ -772,6 +775,7 @@ static const struct message capcode_str[] = {
 	{CAPABILITY_CODE_ADDPATH, "AddPath"},
 	{CAPABILITY_CODE_DYNAMIC, "Dynamic"},
 	{CAPABILITY_CODE_ENHE, "Extended Next Hop Encoding"},
+	{CAPABILITY_CODE_BGPSEC, "BGPsec"},
 	{CAPABILITY_CODE_DYNAMIC_OLD, "Dynamic (Old)"},
 	{CAPABILITY_CODE_REFRESH_OLD, "Route Refresh (Old)"},
 	{CAPABILITY_CODE_ORF_OLD, "ORF (Old)"},
@@ -791,6 +795,7 @@ static const size_t cap_minsizes[] = {
 		[CAPABILITY_CODE_DYNAMIC] = CAPABILITY_CODE_DYNAMIC_LEN,
 		[CAPABILITY_CODE_DYNAMIC_OLD] = CAPABILITY_CODE_DYNAMIC_LEN,
 		[CAPABILITY_CODE_ENHE] = CAPABILITY_CODE_ENHE_LEN,
+		[CAPABILITY_CODE_BGPSEC] = CAPABILITY_CODE_BGPSEC_LEN,
 		[CAPABILITY_CODE_REFRESH_OLD] = CAPABILITY_CODE_REFRESH_LEN,
 		[CAPABILITY_CODE_ORF_OLD] = CAPABILITY_CODE_ORF_LEN,
 		[CAPABILITY_CODE_FQDN] = CAPABILITY_CODE_MIN_FQDN_LEN,
@@ -813,6 +818,7 @@ static const size_t cap_modsizes[] = {
 		[CAPABILITY_CODE_DYNAMIC] = 1,
 		[CAPABILITY_CODE_DYNAMIC_OLD] = 1,
 		[CAPABILITY_CODE_ENHE] = 6,
+		[CAPABILITY_CODE_BGPSEC] = 3,
 		[CAPABILITY_CODE_REFRESH_OLD] = 1,
 		[CAPABILITY_CODE_ORF_OLD] = 1,
 		[CAPABILITY_CODE_FQDN] = 1,
@@ -887,6 +893,7 @@ static int bgp_capability_parse(struct peer *peer, size_t length,
 		case CAPABILITY_CODE_FQDN:
 		case CAPABILITY_CODE_ENHANCED_RR:
 		case CAPABILITY_CODE_EXT_MESSAGE:
+		case CAPABILITY_CODE_BGPSEC:
 			/* Check length. */
 			if (caphdr.length < cap_minsizes[caphdr.code]) {
 				zlog_info(
@@ -980,6 +987,16 @@ static int bgp_capability_parse(struct peer *peer, size_t length,
 			break;
 		case CAPABILITY_CODE_FQDN:
 			ret = bgp_capability_hostname(peer, &caphdr);
+			break;
+		// BGPsecHook to parse capability.
+		case CAPABILITY_CODE_BGPSEC:
+			ret = hook_call(bgp_capability_bgpsec, peer, &caphdr);
+			if (ret) {
+				ret = 0;
+                flog_err(EC_BGP_CAPABILITY_INVALID_DATA,
+                         "%s: Ignoring BGPsec capability from peer %s",
+                         __func__, peer->host);
+            }
 			break;
 		default:
 			if (caphdr.code > 128) {
@@ -1631,6 +1648,9 @@ void bgp_open_capability(struct stream *s, struct peer *peer)
 				peer->host, cmd_hostname_get(),
 				cmd_domainname_get());
 	}
+
+	// BGPsecHook to write capabilities.
+	hook_call(bgp_put_bgpsec_cap, s, peer);
 
 	bgp_peer_send_gr_capability(s, peer, cp);
 

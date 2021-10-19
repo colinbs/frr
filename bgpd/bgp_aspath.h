@@ -30,6 +30,8 @@
 #define AS_CONFED_SEQUENCE           3
 #define AS_CONFED_SET                4
 
+#define SKI_LENGTH                   20
+
 /* Private AS range defined in RFC2270.  */
 #define BGP_PRIVATE_AS_MIN       64512U
 #define BGP_PRIVATE_AS_MAX UINT16_MAX
@@ -55,6 +57,73 @@ struct assegment {
 	as_t *as;
 	unsigned short length;
 	uint8_t type;
+};
+
+/* BGPsec Secure_Path Segment */
+struct bgpsec_secpath {
+	struct bgpsec_secpath *next;
+	uint8_t pcount;
+	uint8_t flags;
+	as_t as;
+};
+
+/* BGPsec Signature Segment */
+struct bgpsec_sigseg {
+	struct bgpsec_sigseg *next;
+
+	/* 20 bytes Subject Key Identifier */
+	uint8_t ski[SKI_LENGTH];
+
+	/* Length of the signature */
+	uint16_t sig_len;
+
+	/* Signature in binary format */
+	uint8_t *signature;
+};
+
+struct bgpsec_sigblock {
+	/* Total length of the signature block, including length */
+	uint16_t length;
+
+	/* Algorithm Suite Identifier */
+	uint8_t alg;
+
+    /* Count of signature segments */
+    uint16_t sig_count;
+
+	/* All signature segments */
+	struct bgpsec_sigseg *sigsegs;
+};
+
+
+/* BGPsec_PATH that contains all secure paths and the signature block */
+struct bgpsec_aspath {
+	unsigned long refcnt;
+
+    /* Reference to the next BGPsec AS path that belongs to the same attribute */
+    struct bgpsec_aspath *next;
+
+    /* Reference to the prefix this BGPsec AS path covers. Used for look-up */
+    struct bgp_nlri *pfx;
+
+	/* All secure paths */
+	struct bgpsec_secpath *secpaths;
+
+    /* Count of secure path segments */
+    uint16_t path_count;
+
+	/* The signature block that contains the signature segments.
+	 * Currently, only one signature block is required. The
+	 * second block is reserved for future uses when more algorithm
+	 * suites are introduced. */
+	struct bgpsec_sigblock *sigblock1;
+
+	/* Currently not used. Reserved for future algorithm suites. */
+	struct bgpsec_sigblock *sigblock2;
+
+	/* A string representation of the AS path */
+	char *str;
+	unsigned short str_len;
 };
 
 /* AS path may be include some AsSegments.  */
@@ -120,6 +189,7 @@ extern bool aspath_firstas_check(struct aspath *, as_t);
 extern bool aspath_confed_check(struct aspath *);
 extern bool aspath_left_confed_check(struct aspath *);
 extern unsigned long aspath_count(void);
+extern unsigned long bgpsecpath_count(void);
 extern unsigned int aspath_count_hops(const struct aspath *);
 extern bool aspath_check_as_sets(struct aspath *aspath);
 extern bool aspath_check_as_zero(struct aspath *aspath);
@@ -148,5 +218,60 @@ extern void bgp_remove_aspath_from_aggregate_hash(
 						struct aspath *aspath);
 
 extern void bgp_aggr_aspath_remove(void *arg);
+
+extern struct bgpsec_aspath *bgpsec_aspath_get(struct bgpsec_aspath *aspath);
+
+extern void bgpsec_aspath_init(void);
+
+extern void bgpsec_aspath_finish(void);
+
+extern unsigned int bgpsec_aspath_key_make(const void *p);
+
+extern bool bgpsec_aspath_cmp(const void *arg1, const void *arg2);
+
+extern struct aspath *bgpsec_aspath_parse(struct attr *attr);
+
+extern struct bgpsec_aspath *bgpsec_aspath_new(void);
+
+extern void bgpsec_aspath_free(struct bgpsec_aspath *aspath);
+
+extern struct bgpsec_aspath *bgpsec_aspath_intern(
+                                    struct bgpsec_aspath *aspath);
+
+extern void bgpsec_aspath_unintern(struct bgpsec_aspath **aspath);
+
+extern void bgpsec_aspath_append(struct bgpsec_aspath *aspath,
+                                 struct bgpsec_aspath *new_path);
+
+extern struct bgpsec_aspath *bgpsec_aspath_find_by_pfx(
+                                    struct bgpsec_aspath *aspath,
+                                    struct bgp_nlri *pfx);
+
+extern struct bgpsec_sigblock *bgpsec_sigblock_new(void);
+
+extern struct bgpsec_sigseg *bgpsec_ss_new(void);
+
+extern struct bgpsec_secpath *bgpsec_sps_new(void);
+
+extern void bgpsec_sps_free(struct bgpsec_secpath *sps);
+
+extern void bgpsec_sps_free_all(struct bgpsec_secpath *sps);
+
+extern void bgpsec_ss_free(struct bgpsec_sigseg *ss);
+
+extern void bgpsec_ss_free_all(struct bgpsec_sigseg *ss);
+
+extern struct bgpsec_aspath *copy_bgpsecpath(
+                                const struct bgpsec_aspath *aspath);
+
+extern struct bgpsec_secpath *copy_sps(struct bgpsec_secpath *sps);
+
+extern struct bgpsec_sigseg *copy_ss(struct bgpsec_sigseg *ss);
+
+extern struct bgpsec_secpath *reverse_sps_order(
+                                        struct bgpsec_secpath *sps);
+
+extern struct bgpsec_sigseg *reverse_ss_order(
+                                        struct bgpsec_sigseg *ss);
 
 #endif /* _QUAGGA_BGP_ASPATH_H */

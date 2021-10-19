@@ -5083,6 +5083,110 @@ ALIAS(no_neighbor_shutdown_msg, no_neighbor_shutdown_cmd,
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Administratively shut down this neighbor\n")
 
+/* neighbor capability bgpsec */
+DEFUN (neighbor_capability_bgpsec,
+       neighbor_capability_bgpsec_cmd,
+       "neighbor <A.B.C.D|X:X::X:X|WORD> capability bgpsec <both|send|receive> <any|ipv4|ipv6>",
+       NEIGHBOR_STR
+       NEIGHBOR_ADDR_STR2
+       "Advertise capability to the peer\n"
+       "Advertise BGPsec send/receive capabilities to this neighbor\n"
+       "Send and receive BGPsec updates for given AFIs\n"
+       "Send BGPsec updates for given AFI\n"
+       "Receive BGPsec updates for given AFI\n"
+       "IPv4 and IPv6 prefixes\n"
+       "IPv4 prefixes\n"
+       "IPv6 prefixes\n")
+{
+    int idx_peer = 1;
+    int idx_cap = 4;
+    int idx_afi = 5;
+    uint32_t flag = 0;
+
+    //TODO: Error handling
+    if (strcmp(argv[idx_cap]->arg, "send") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV6;
+        else if (strcmp(argv[idx_afi]->arg, "any") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "receive") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+        else if (strcmp(argv[idx_afi]->arg, "any") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "both") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6 | PEER_FLAG_BGPSEC_SEND_IPV6;
+        else if (strcmp(argv[idx_afi]->arg, "any") == 0) {
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV6;
+            flag |= PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+        }
+    }
+
+	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
+				 flag);
+}
+
+/* neighbor capability bgpsec */
+DEFUN (no_neighbor_capability_bgpsec,
+       no_neighbor_capability_bgpsec_cmd,
+       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability bgpsec <both|send|receive> <any|ipv4|ipv6>",
+       NO_STR
+       NEIGHBOR_STR
+       NEIGHBOR_ADDR_STR2
+       "Do not advertise capability to the peer\n"
+       "Do not advertise BGPsec send/receive capabilities to this neighbor\n"
+       "Do not send and receive BGPsec updates for given AFIs\n"
+       "Do not send BGPsec updates for given AFI\n"
+       "Do not receive BGPsec updates for given AFI\n"
+       "No IPv4 and IPv6 prefixes\n"
+       "No IPv4 prefixes\n"
+       "No IPv6 prefixes\n")
+{
+    int idx_peer = 2;
+    int idx_cap = 5;
+    int idx_afi = 6;
+    uint32_t flag = 0;
+
+    //TODO: Error handling
+    if (strcmp(argv[idx_cap]->arg, "send") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV6;
+        else if (strcmp(argv[idx_afi]->arg, "any") == 0)
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "receive") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+        else if (strcmp(argv[idx_afi]->arg, "any") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+    } else if (strcmp(argv[idx_cap]->arg, "both") == 0) {
+        if (strcmp(argv[idx_afi]->arg, "ipv4") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV4;
+        else if (strcmp(argv[idx_afi]->arg, "ipv6") == 0)
+            flag = PEER_FLAG_BGPSEC_RECEIVE_IPV6 | PEER_FLAG_BGPSEC_SEND_IPV6;
+        else if (strcmp(argv[idx_afi]->arg, "any") == 0) {
+            flag = PEER_FLAG_BGPSEC_SEND_IPV4 | PEER_FLAG_BGPSEC_SEND_IPV6;
+            flag |= PEER_FLAG_BGPSEC_RECEIVE_IPV4 | PEER_FLAG_BGPSEC_RECEIVE_IPV6;
+        }
+    }
+
+    zlog_debug("BGPSEC: BGPsec capabilities unset: dont %s %s", argv[5]->arg, argv[6]->arg);
+
+	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
+				 flag);
+}
+
+/* neighbor capability dynamic. */
 DEFUN(neighbor_shutdown_rtt,
       neighbor_shutdown_rtt_cmd,
       "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown rtt (1-65535) [count (1-255)]",
@@ -9853,6 +9957,22 @@ DEFUN (show_bgp_memory,
 		mtype_memstr(memstrbuf, sizeof(memstrbuf),
 			     count * sizeof(struct assegment)));
 
+    /* BGPsec_PATH attributes */
+	count = bgpsecpath_count();
+	vty_out(vty, "%ld BGPsec_PATH entries, using %s of memory\n", count,
+		mtype_memstr(memstrbuf, sizeof(memstrbuf),
+			     count * sizeof(struct bgpsec_aspath)));
+
+	count = mtype_stats_alloc(MTYPE_BGP_BGPSEC_PATH_SPS);
+	vty_out(vty, "%ld BGPsec_PATH secure path segments, using %s of memory\n", count,
+		mtype_memstr(memstrbuf, sizeof(memstrbuf),
+                 count * sizeof(struct bgpsec_secpath)));
+
+	count = mtype_stats_alloc(MTYPE_BGP_BGPSEC_PATH_SS);
+	vty_out(vty, "%ld BGPsec_PATH signature segments, using %s of memory\n", count,
+		mtype_memstr(memstrbuf, sizeof(memstrbuf),
+                 count * sizeof(struct bgpsec_sigseg)));
+
 	/* Other attributes */
 	if ((count = community_count()))
 		vty_out(vty, "%ld BGP community entries, using %s of memory\n",
@@ -13448,6 +13568,79 @@ static void bgp_show_peer(struct vty *vty, struct peer *p, bool use_json,
 						vty_out(vty, "\n");
 					}
 				} /* Gracefull Restart */
+
+				/* BGPsec Capabilities */
+				if (CHECK_FLAG(p->cap, PEER_CAP_BGPSEC_SEND_IPV4_ADV)
+				    || CHECK_FLAG(p->cap,
+						  PEER_CAP_BGPSEC_SEND_IPV4_RCV)) {
+                    vty_out(vty, "    BGPsec Capability SEND IPv4:");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_SEND_IPV4_ADV))
+						vty_out(vty, " advertised");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_SEND_IPV4_RCV))
+						vty_out(vty, " %sreceived",
+							CHECK_FLAG(
+								p->cap,
+								PEER_CAP_BGPSEC_SEND_IPV4_ADV)
+								? "and "
+								: "");
+					vty_out(vty, "\n");
+                }
+
+				if (CHECK_FLAG(p->cap, PEER_CAP_BGPSEC_SEND_IPV6_ADV)
+				    || CHECK_FLAG(p->cap,
+						  PEER_CAP_BGPSEC_SEND_IPV6_RCV)) {
+                    vty_out(vty, "    BGPsec Capability SEND IPv6:");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_SEND_IPV6_ADV))
+						vty_out(vty, " advertised");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_SEND_IPV6_RCV))
+						vty_out(vty, " %sreceived",
+							CHECK_FLAG(
+								p->cap,
+								PEER_CAP_BGPSEC_SEND_IPV6_ADV)
+								? "and "
+								: "");
+					vty_out(vty, "\n");
+                }
+
+				if (CHECK_FLAG(p->cap, PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV)
+				    || CHECK_FLAG(p->cap,
+						  PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV)) {
+                    vty_out(vty, "    BGPsec Capability RECEIVE IPv4:");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV))
+						vty_out(vty, " advertised");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_RECEIVE_IPV4_RCV))
+						vty_out(vty, " %sreceived",
+							CHECK_FLAG(
+								p->cap,
+								PEER_CAP_BGPSEC_RECEIVE_IPV4_ADV)
+								? "and "
+								: "");
+					vty_out(vty, "\n");
+                }
+
+				if (CHECK_FLAG(p->cap, PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV)
+				    || CHECK_FLAG(p->cap,
+						  PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV)) {
+                    vty_out(vty, "    BGPsec Capability RECEIVE IPv6:");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV))
+						vty_out(vty, " advertised");
+					if (CHECK_FLAG(p->cap,
+						       PEER_CAP_BGPSEC_RECEIVE_IPV6_RCV))
+						vty_out(vty, " %sreceived",
+							CHECK_FLAG(
+								p->cap,
+								PEER_CAP_BGPSEC_RECEIVE_IPV6_ADV)
+								? "and "
+								: "");
+					vty_out(vty, "\n");
+                } /* BGPsec Capabilities */
 			}
 		}
 	}
@@ -16634,6 +16827,28 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 		}
 	}
 
+    /* capability bgpsec */
+    if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV4)
+        && peergroup_flag_check(peer, PEER_FLAG_BGPSEC_RECEIVE_IPV4)) {
+        if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV6)
+            && peergroup_flag_check(peer, PEER_FLAG_BGPSEC_RECEIVE_IPV6)) {
+            vty_out(vty, " neighbor %s capability bgpsec both", addr);
+        }
+    } else if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV4)) {
+        vty_out(vty, " neighbor %s capability bgpsec send", addr);
+    } else if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_RECEIVE_IPV4)) {
+        vty_out(vty, " neighbor %s capability bgpsec receive", addr);
+    }
+
+    if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV4)
+        && peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV6)) {
+        vty_out(vty, " any\n");
+    } else if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV4)) {
+        vty_out(vty, " ipv4\n");
+    } else if (peergroup_flag_check(peer, PEER_FLAG_BGPSEC_SEND_IPV6)) {
+        vty_out(vty, " ipv6\n");
+    }
+
 	/* dont-capability-negotiation */
 	if (peergroup_flag_check(peer, PEER_FLAG_DONT_CAPABILITY))
 		vty_out(vty, " neighbor %s dont-capability-negotiate\n", addr);
@@ -18449,6 +18664,9 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_passive_cmd);
 	install_element(BGP_NODE, &no_neighbor_passive_cmd);
 
+    /* "neighbor capability bgpsec send/receive" commands */
+    install_element(BGP_NODE, &neighbor_capability_bgpsec_cmd);
+    install_element(BGP_NODE, &no_neighbor_capability_bgpsec_cmd);
 
 	/* "neighbor shutdown" commands. */
 	install_element(BGP_NODE, &neighbor_shutdown_cmd);

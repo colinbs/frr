@@ -181,6 +181,18 @@ static struct log_ref ferr_bgp_warn[] = {
 		.description = "BGP is in the process of building NLRI information for a peer and has discovered an inconsistent internal state",
 		.suggestion = "Gather log files and open an Issue, restart FRR",
 	},
+    {
+        .code = EC_BGP_BGPSEC_INVALID_AFI,
+        .title = "BGP BGPsec detected an invalid AFI",
+        .description = "During capability negotiation, BGPsec SEND and RECEIVE capabilities are exchanged, with appropriate AFI. Valid AFI for BGPsec are IPv4 and IPv6. Other AFI are not supported. If an invalid AFI is detected, the capability containing this AFI will be ignored. Capabilities containing valid AFI are still applied.",
+        .suggestion = "Most likely a bug on the peering side",
+    },
+    {
+        .code = EC_BGP_BGPSEC_UNSUPPORTED_VERSION,
+        .title = "BGP BGPsec detected unsupported version",
+        .description = "During capability negotiation, the latest supported BGPsec version is contained within a capability. If a peering routers BGPsec version is higher than our version for a capability, this capability will be ignored. Capabilities with versions less or equal our own version are still applied",
+        .suggestion = "Try to update BGPsec to the most recent version",
+    },
 	{
 		.code = END_FERR,
 	}

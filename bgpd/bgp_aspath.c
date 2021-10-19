@@ -88,6 +88,9 @@ struct assegment_header {
 /* Hash for aspath.  This is the top level structure of AS path. */
 static struct hash *ashash;
 
+/* Hash for bgpsec aspath */
+static struct hash *bgpsechash;
+
 /* Stream for SNMP. See aspath_snmp_pathseg */
 static struct stream *snmp_stream;
 
@@ -849,11 +852,78 @@ struct aspath *aspath_parse(struct stream *s, size_t length, int use32bit)
 	if (length % AS16_VALUE_SIZE)
 		return NULL;
 
-	memset(&as, 0, sizeof(struct aspath));
+    memset(&as, 0, sizeof(struct aspath));
 	if (assegments_parse(s, length, &as.segments, use32bit) < 0)
 		return NULL;
 
 	/* If already same aspath exist then return it. */
+	find = hash_get(ashash, &as, aspath_hash_alloc);
+
+	/* bug! should not happen, let the daemon crash below */
+	assert(find);
+
+	/* if the aspath was already hashed free temporary memory. */
+	if (find->refcnt) {
+		assegment_free_all(as.segments);
+		/* aspath_key_make() always updates the string */
+		XFREE(MTYPE_AS_STR, as.str);
+		if (as.json) {
+			json_object_free(as.json);
+			as.json = NULL;
+		}
+	}
+
+	find->refcnt++;
+
+	return find;
+}
+
+/* This function is basically a combination of aspath_parse
+ * and assegments_parse but without streams. The AS information
+ * is gathered from attr->bgpsecpath */
+struct aspath *bgpsec_aspath_parse(struct attr *attr)
+{
+	struct aspath as;
+    struct aspath *find;
+	struct assegment *seg, *prev = NULL, *head = NULL;
+    struct assegment *dup_seg = NULL;
+    struct bgpsec_aspath *path = attr->bgpsecpath;
+    struct bgpsec_secpath *sps = path->secpaths;
+    uint8_t type;
+
+    /*as = XCALLOC(MTYPE_AS_PATH, sizeof(struct aspath));*/
+    memset(&as, 0, sizeof(struct aspath));
+    for (uint16_t i = 0; i < path->path_count; i++) {
+
+        if ((sps->flags | 0x8) == 1)
+            type = AS_CONFED_SEQUENCE;
+        else
+            type = AS_SEQUENCE;
+
+		seg = assegment_new(type, 1);
+
+		if (head)
+			prev->next = seg;
+		else /* it's the first segment */
+			head = prev = seg;
+
+        *(seg->as) = sps->as;
+
+		prev = seg;
+
+        /* If the pcount is > 1, append the same AS path segment
+         * additional pcount-1 times. */
+        for (uint8_t j = 1; j < sps->pcount; j++) {
+            dup_seg = assegment_dup(seg);
+            prev->next = dup_seg;
+            prev = dup_seg;
+        }
+
+        sps = sps->next;
+	}
+
+    as.segments = assegment_normalise(head);
+
 	find = hash_get(ashash, &as, aspath_hash_alloc);
 
 	/* bug! should not happen, let the daemon crash below */
@@ -1880,6 +1950,11 @@ unsigned long aspath_count(void)
 	return ashash->count;
 }
 
+unsigned long bgpsecpath_count(void)
+{
+	return bgpsechash->count;
+}
+
 /*
    Theoretically, one as path can have:
 
@@ -2081,6 +2156,20 @@ void aspath_finish(void)
 		stream_free(snmp_stream);
 }
 
+/* BGPsec AS path hash initialize. */
+void bgpsec_aspath_init(void)
+{
+	bgpsechash = hash_create_size(32768, bgpsec_aspath_key_make, bgpsec_aspath_cmp,
+				  "BGPsec_PATH");
+}
+
+void bgpsec_aspath_finish(void)
+{
+	hash_clean(bgpsechash, (void (*)(void *))bgpsec_aspath_free);
+	hash_free(bgpsechash);
+	bgpsechash = NULL;
+}
+
 /* return and as path value */
 const char *aspath_print(struct aspath *as)
 {
@@ -2267,3 +2356,484 @@ void bgp_remove_aspath_from_aggregate_hash(struct bgp_aggregate *aggregate,
 	}
 }
 
+unsigned int bgpsec_aspath_key_make(const void *p)
+{
+	const struct bgpsec_aspath *aspath = (const struct bgpsec_aspath *) p;
+    /*const struct bgpsec_sigblock *block;*/
+    /*const struct bgpsec_sigseg *ss;*/
+    /*const struct bgpsec_secpath *sps;*/
+	unsigned int key = 0;
+
+    /*block = aspath->sigblock1;*/
+    /*sps = aspath->secpaths;*/
+
+    /*if (aspath->sigblock1) {*/
+        /*ss = block->sigsegs;*/
+        /*key += jhash(block, 4, 0);*/
+        /*if (ss) {*/
+            /*key += jhash(ss->signature, ss->sig_len, 0);*/
+        /*}*/
+    /*} else {*/
+        /*key = jhash_1word(aspath->path_count, key);*/
+        /*key += jhash(sps, 4, 0);*/
+        /*key += jhash(block, 4, 0);*/
+    /*}*/
+    /*while (sps) {*/
+        /*key = jhash_1word(aspath->path_count, key);*/
+        /*key += jhash(&(sps->as), 4, 0);*/
+        /*sps = sps->next;*/
+    /*}*/
+
+    if (aspath->str) {
+        key += jhash(aspath->str, aspath->str_len, 0);
+    }
+
+    if (aspath->pfx) {
+        key += jhash(aspath->pfx->nlri, aspath->pfx->length, 0);
+    }
+
+	return key;
+}
+
+/* If two bgpsec aspaths have same fields then return 1 else return 0 */
+bool bgpsec_aspath_cmp(const void *arg1, const void *arg2)
+{
+    if (arg1 == arg2) {
+        return true;
+    }
+
+    if (!arg1 && !arg2) {
+        return true;
+    }
+
+    const struct bgpsec_aspath *path1 = (const struct bgpsec_aspath *)arg1;
+    const struct bgpsec_aspath *path2 = (const struct bgpsec_aspath *)arg2;
+
+	/*const struct bgpsec_secpath *sps1 = ((const struct bgpsec_aspath *)arg1)->secpaths;*/
+	/*const struct bgpsec_secpath *sps2 = ((const struct bgpsec_aspath *)arg2)->secpaths;*/
+
+    /* yes, it's confusing, but sigblock1 is correct for both */
+    /*const struct bgpsec_sigblock *block1 = ((const struct bgpsec_aspath *)arg1)->sigblock1;*/
+    /*const struct bgpsec_sigblock *block2 = ((const struct bgpsec_aspath *)arg2)->sigblock1;*/
+
+    /*const struct bgpsec_sigseg *ss1 = block1->sigsegs;*/
+    /*const struct bgpsec_sigseg *ss2 = block2->sigsegs;*/
+
+    const struct bgp_nlri *nlri1 = ((const struct bgpsec_aspath *)arg1)->pfx;
+    const struct bgp_nlri *nlri2 = ((const struct bgpsec_aspath *)arg2)->pfx;
+
+    /* Check, if the secure path segments are equal */
+	/*while (sps1 || sps2) {*/
+		/*if ((!sps1 && sps2) || (sps1 && !sps2))*/
+			/*return false;*/
+		/*if (sps1->as != sps2->as)*/
+			/*return false;*/
+		/*if (sps1->pcount != sps2->pcount)*/
+			/*return false;*/
+		/*if (sps1->flags != sps2->flags)*/
+			/*return false;*/
+
+		/*sps1 = sps1->next;*/
+		/*sps2 = sps2->next;*/
+	/*}*/
+
+    /* TODO: check sigblock2 too as soon as another algorithm suite is out */
+    /* Check, if signature blocks are equal */
+    /*if ((!block1 && block2) || (block1 && !block2))*/
+        /*return false;*/
+    /*if (block1->length != block2->length)*/
+        /*return false;*/
+    /*if (block1->alg != block2->alg)*/
+        /*return false;*/
+    /*if (block1->sig_count != block2->sig_count)*/
+        /*return false;*/
+
+    /* Check, if signature segments are equal */
+    /*while (ss1 || ss2) {*/
+        /*if ((!ss1 && ss2) || (ss1 && !ss2))*/
+            /*return false;*/
+        /*if (memcmp(ss1->ski, ss2->ski, SKI_SIZE) != 0)*/
+            /*return false;*/
+        /*if (ss1->sig_len != ss2->sig_len)*/
+            /*return false;*/
+        /*if (memcmp(ss1->signature, ss2->signature, ss1->sig_len) != 0)*/
+            /*return false;*/
+
+        /*ss1 = ss1->next;*/
+        /*ss2 = ss2->next;*/
+    /*}*/
+
+    if ((!path1 && path2) || (path1 && !path2)) {
+        return false;
+    }
+    if (strcmp(path1->str, path2->str) != 0) {
+        return false;
+    }
+    if ((!nlri1->nlri && nlri2->nlri) || (nlri1->nlri && !nlri2->nlri)) {
+        return false;
+    }
+    if (memcmp(nlri1->nlri, nlri2->nlri, nlri1->length)) {
+        return false;
+    }
+
+	return true;
+}
+
+struct bgpsec_aspath *bgpsec_aspath_new(void)
+{
+    struct bgpsec_aspath *aspath =
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH, sizeof(struct bgpsec_aspath));
+
+    aspath->refcnt = 0;
+    aspath->next = NULL;
+    aspath->pfx = NULL;
+    aspath->secpaths = NULL;
+    aspath->path_count = 0;
+    aspath->sigblock1 = NULL;
+    aspath->sigblock2 = NULL;
+
+    aspath->str = NULL;
+    aspath->str_len = 0;
+
+    return aspath;
+}
+
+void bgpsec_aspath_free(struct bgpsec_aspath *aspath)
+{
+    if (!aspath)
+        return;
+
+    if (aspath->secpaths) {
+        bgpsec_sps_free_all(aspath->secpaths);
+        aspath->secpaths = NULL;
+    }
+
+    if (aspath->sigblock1) {
+        if (aspath->sigblock1->sigsegs) {
+            bgpsec_ss_free_all(aspath->sigblock1->sigsegs);
+            aspath->sigblock1->sigsegs = NULL;
+        }
+        XFREE(MTYPE_BGP_BGPSEC_SIGBLOCK, aspath->sigblock1);
+        aspath->sigblock1 = NULL;
+    }
+
+    if (aspath->sigblock2) {
+        if (aspath->sigblock2->sigsegs) {
+            bgpsec_ss_free_all(aspath->sigblock2->sigsegs);
+            aspath->sigblock2->sigsegs = NULL;
+        }
+        XFREE(MTYPE_BGP_BGPSEC_SIGBLOCK, aspath->sigblock2);
+        aspath->sigblock2 = NULL;
+    }
+
+    if (aspath->pfx) {
+        if (aspath->pfx->nlri) {
+            XFREE(MTYPE_BGP_BGPSEC_NLRI, aspath->pfx->nlri);
+        }
+        XFREE(MTYPE_BGP_BGPSEC_NLRI, aspath->pfx);
+    }
+
+    if (aspath->str)
+        XFREE(MTYPE_BGP_BGPSEC_PATH_STR, aspath->str);
+
+    if (aspath->next)
+        bgpsec_aspath_free(aspath->next);
+
+    XFREE(MTYPE_BGP_BGPSEC_PATH, aspath);
+}
+
+static void *bgpsec_aspath_hash_alloc(void *arg)
+{
+	const struct bgpsec_aspath *aspath = arg;
+	struct bgpsec_aspath *new;
+
+	/* Malformed AS path value. */
+	assert(aspath->str);
+
+	/* New bgpsec_aspath structure is needed. */
+    new = copy_bgpsecpath(aspath);
+
+	new->refcnt = 0;
+
+	return new;
+}
+
+struct bgpsec_aspath *bgpsec_aspath_intern(struct bgpsec_aspath *aspath)
+{
+	struct bgpsec_aspath *find;
+
+	/* Assert this AS path structure is not interned and has the string
+	   representation built. */
+	assert(aspath->refcnt == 0);
+	assert(aspath->str);
+
+	/* Check AS path hash. */
+	find = hash_get(bgpsechash, aspath, bgpsec_aspath_hash_alloc);
+	if (find != aspath) {
+        bgpsec_aspath_free(aspath);
+        aspath = NULL;
+    }
+
+	find->refcnt++;
+
+	return find;
+}
+
+struct bgpsec_aspath *bgpsec_aspath_get(struct bgpsec_aspath *aspath) {
+    return hash_get(bgpsechash, aspath, bgpsec_aspath_hash_alloc);
+}
+
+/* Unintern aspath from BGPsec AS path bucket. */
+void bgpsec_aspath_unintern(struct bgpsec_aspath **aspath)
+{
+	struct bgpsec_aspath *ret;
+	struct bgpsec_aspath *asp = *aspath;
+
+	if (asp->refcnt)
+		asp->refcnt--;
+
+	if (asp->refcnt == 0) {
+		/* This bgpsec_aspath must exist in bgpsec path hash table. */
+		ret = hash_release(bgpsechash, asp);
+		assert(ret != NULL);
+		bgpsec_aspath_free(asp);
+		*aspath = NULL;
+	}
+}
+
+void bgpsec_aspath_append(struct bgpsec_aspath *aspath,
+                          struct bgpsec_aspath *new_path)
+{
+    struct bgpsec_aspath *last;
+
+    if (!aspath || !new_path)
+        return;
+
+    while (aspath) {
+        last = aspath;
+        aspath = aspath->next;
+    }
+
+    last->next = new_path;
+}
+
+struct bgpsec_aspath *bgpsec_aspath_find_by_pfx(struct bgpsec_aspath *aspath,
+                                                struct bgp_nlri *pfx)
+{
+    int rtval = 0;
+
+    if (!aspath || !pfx)
+        return NULL;
+
+    while (aspath) {
+        /*rtval = prefix_same(aspath->pfx, pfx);*/
+        if (rtval)
+            return aspath;
+        aspath = aspath->next;
+    }
+
+    return NULL;
+}
+
+struct bgpsec_sigblock *bgpsec_sigblock_new(void)
+{
+    struct bgpsec_sigblock *block =
+        XMALLOC(MTYPE_BGP_BGPSEC_SIGBLOCK, sizeof(struct bgpsec_sigblock));
+    block->sigsegs = NULL;
+    block->length = 0;
+    block->alg = 1;
+    block->sig_count = 0;
+
+    return block;
+}
+
+struct bgpsec_sigseg *bgpsec_ss_new(void)
+{
+    struct bgpsec_sigseg *ss =
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH_SS, sizeof(struct bgpsec_sigseg));
+    ss->next = NULL;
+    ss->signature = NULL;
+    ss->sig_len = 0;
+    memset(ss->ski, 0, SKI_SIZE);
+    return ss;
+}
+
+struct bgpsec_secpath *bgpsec_sps_new(void)
+{
+    struct bgpsec_secpath *sps =
+        XMALLOC(MTYPE_BGP_BGPSEC_PATH_SPS, sizeof(struct bgpsec_secpath));
+    sps->next = NULL;
+    sps->flags = 0;
+    sps->pcount = 0;
+    sps->as = 0;
+    return sps;
+}
+
+void bgpsec_sps_free(struct bgpsec_secpath *sps)
+{
+    if (sps)
+        XFREE(MTYPE_BGP_BGPSEC_PATH_SPS, sps);
+}
+
+void bgpsec_sps_free_all(struct bgpsec_secpath *sps)
+{
+    if (!sps)
+        return;
+    if (sps->next) {
+        bgpsec_sps_free_all(sps->next);
+        sps->next = NULL;
+    }
+    bgpsec_sps_free(sps);
+    sps = NULL;
+}
+
+void bgpsec_ss_free(struct bgpsec_sigseg *ss)
+{
+    if (ss && ss->signature) {
+        XFREE(MTYPE_BGP_BGPSEC_SIG, ss->signature);
+        ss->signature = NULL;
+    }
+    if (ss) {
+        XFREE(MTYPE_BGP_BGPSEC_PATH_SS, ss);
+        ss = NULL;
+    }
+}
+
+void bgpsec_ss_free_all(struct bgpsec_sigseg *ss)
+{
+    if (!ss)
+        return;
+    if (ss->next)
+        bgpsec_ss_free_all(ss->next);
+    bgpsec_ss_free(ss);
+}
+
+struct bgpsec_aspath *copy_bgpsecpath(const struct bgpsec_aspath *aspath)
+{
+    struct bgpsec_aspath *new_aspath = NULL;
+
+    if (!aspath)
+        return NULL;
+
+    new_aspath = bgpsec_aspath_new();
+
+    if (!new_aspath)
+        return NULL;
+
+    new_aspath->refcnt = aspath->refcnt;
+
+    // copying sigblock1 should do the trick for now.
+    new_aspath->sigblock1 = bgpsec_sigblock_new();
+    new_aspath->sigblock1->length = aspath->sigblock1->length;
+    new_aspath->sigblock1->alg = aspath->sigblock1->alg;
+    new_aspath->sigblock1->sig_count = aspath->sigblock1->sig_count;
+    new_aspath->sigblock1->sigsegs = copy_ss(aspath->sigblock1->sigsegs);
+
+    new_aspath->secpaths = copy_sps(aspath->secpaths);
+    new_aspath->path_count = aspath->path_count;
+
+    new_aspath->pfx = XCALLOC(MTYPE_BGP_BGPSEC_NLRI, sizeof(struct bgp_nlri));
+    new_aspath->pfx->nlri = XCALLOC(MTYPE_BGP_BGPSEC_NLRI, aspath->pfx->length);
+    new_aspath->pfx->afi = aspath->pfx->afi;
+    new_aspath->pfx->safi = aspath->pfx->safi;
+    new_aspath->pfx->length = aspath->pfx->length;
+    memcpy(new_aspath->pfx->nlri, aspath->pfx->nlri, aspath->pfx->length);
+
+    new_aspath->str = XCALLOC(MTYPE_BGP_BGPSEC_PATH_STR, aspath->str_len + 1);
+    /*memcpy(new_aspath->str, aspath->str, aspath->str_len);*/
+    strcpy(new_aspath->str, aspath->str);
+    new_aspath->str_len = aspath->str_len;
+
+    return new_aspath;
+}
+
+struct bgpsec_secpath *copy_sps(struct bgpsec_secpath *sps)
+{
+    struct bgpsec_secpath *new;
+
+    if (!sps)
+        return NULL;
+
+    new = bgpsec_sps_new();
+
+    if (!new)
+        return NULL;
+
+    new->pcount = sps->pcount;
+    new->flags = sps->flags;
+    new->as = sps->as;
+
+    new->next = copy_sps(sps->next);
+
+    return new;
+}
+
+struct bgpsec_sigseg *copy_ss(struct bgpsec_sigseg *ss)
+{
+    struct bgpsec_sigseg *new;
+
+    if (!ss)
+        return NULL;
+
+    new = bgpsec_ss_new();
+
+    if (!new)
+        return NULL;
+
+    new->signature = XMALLOC(MTYPE_BGP_BGPSEC_SIG, ss->sig_len);
+
+    if (!new->signature)
+        return NULL;
+
+    memcpy(new->ski, ss->ski, SKI_SIZE);
+    new->sig_len = ss->sig_len;
+    memcpy(new->signature, ss->signature, ss->sig_len);
+
+    new->next = copy_ss(ss->next);
+
+    return new;
+}
+
+struct bgpsec_secpath *reverse_sps_order(struct bgpsec_secpath *sps)
+{
+    struct bgpsec_secpath *copy = NULL;
+    struct bgpsec_secpath *prev = NULL;
+    struct bgpsec_secpath *next = NULL;
+
+    if (!sps)
+        return NULL;
+
+    copy = copy_sps(sps);
+
+    while (copy) {
+        next = copy->next;
+        copy->next = prev;
+
+        prev = copy;
+        copy = next;
+    }
+
+    return prev;
+}
+
+struct bgpsec_sigseg *reverse_ss_order(struct bgpsec_sigseg *ss)
+{
+    struct bgpsec_sigseg *copy = NULL;
+    struct bgpsec_sigseg *prev = NULL;
+    struct bgpsec_sigseg *next = NULL;
+
+    if (!ss)
+        return NULL;
+
+    copy = copy_ss(ss);
+
+    while (copy) {
+        next = copy->next;
+        copy->next = prev;
+
+        prev = copy;
+        copy = next;
+    }
+
+    return prev;
+}

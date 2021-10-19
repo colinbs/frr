@@ -69,6 +69,7 @@ unsigned long conf_bgp_debug_pbr;
 unsigned long conf_bgp_debug_graceful_restart;
 unsigned long conf_bgp_debug_evpn_mh;
 unsigned long conf_bgp_debug_bfd;
+unsigned long conf_bgp_debug_bgpsec;
 
 unsigned long term_bgp_debug_as4;
 unsigned long term_bgp_debug_neighbor_events;
@@ -89,6 +90,7 @@ unsigned long term_bgp_debug_pbr;
 unsigned long term_bgp_debug_graceful_restart;
 unsigned long term_bgp_debug_evpn_mh;
 unsigned long term_bgp_debug_bfd;
+unsigned long term_bgp_debug_bgpsec;
 
 struct list *bgp_debug_neighbor_events_peers = NULL;
 struct list *bgp_debug_keepalive_peers = NULL;
@@ -2120,7 +2122,39 @@ DEFPY(debug_bgp_bfd, debug_bgp_bfd_cmd,
 			bfd_protocol_integration_set_debug(true);
 		}
 	}
+	return CMD_SUCCESS;
+}
 
+DEFUN (debug_bgp_bgpsec,
+       debug_bgp_bgpsec_cmd,
+       "debug bgp bgpsec",
+       DEBUG_STR
+       BGP_STR
+       "Debugging for BGPsec\n")
+{
+	if (vty->node == CONFIG_NODE)
+		DEBUG_ON(bgpsec, BGPSEC);
+	else {
+		TERM_DEBUG_ON(bgpsec, BGPSEC);
+		vty_out(vty, "BGPsec debugging is on\n");
+	}
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_debug_bgp_bgpsec,
+       no_debug_bgp_bgpsec_cmd,
+       "no debug bgp bgpsec",
+       NO_STR
+       DEBUG_STR
+       BGP_STR
+       "Debugging for BGPsec\n")
+{
+	if (vty->node == CONFIG_NODE)
+		DEBUG_OFF(bgpsec, BGPSEC);
+	else {
+		TERM_DEBUG_OFF(bgpsec, BGPSEC);
+		vty_out(vty, "BGPsec debugging is off\n");
+	}
 	return CMD_SUCCESS;
 }
 
@@ -2168,6 +2202,7 @@ DEFUN (no_debug_bgp,
 	TERM_DEBUG_OFF(evpn_mh, EVPN_MH_ES);
 	TERM_DEBUG_OFF(evpn_mh, EVPN_MH_RT);
 	TERM_DEBUG_OFF(bfd, BFD_LIB);
+	TERM_DEBUG_OFF(bgpsec, BGPSEC);
 
 	vty_out(vty, "All possible debugging has been turned off\n");
 
@@ -2259,6 +2294,8 @@ DEFUN_NOSH (show_debugging_bgp,
 
 	if (BGP_DEBUG(bfd, BFD_LIB))
 		vty_out(vty, "  BGP BFD library debugging is on\n");
+	if (BGP_DEBUG(bgpsec, BGPSEC))
+		vty_out(vty, "  BGP bgpsec debugging is on\n");
 
 	vty_out(vty, "\n");
 	return CMD_SUCCESS;
@@ -2389,6 +2426,10 @@ static int bgp_config_write_debug(struct vty *vty)
 		vty_out(vty, "debug bgp bfd\n");
 		write++;
 	}
+    if (CONF_BGP_DEBUG(bgpsec, BGPSEC)) {
+        vty_out(vty, "debug bgp bgpsec\n");
+        write++;
+    }
 
 	return write;
 }
@@ -2522,6 +2563,12 @@ void bgp_debug_init(void)
 	/* debug bgp bfd */
 	install_element(ENABLE_NODE, &debug_bgp_bfd_cmd);
 	install_element(CONFIG_NODE, &debug_bgp_bfd_cmd);
+
+	/* debug bgp bgpsec */
+	install_element(ENABLE_NODE, &debug_bgp_bgpsec_cmd);
+	install_element(CONFIG_NODE, &debug_bgp_bgpsec_cmd);
+	install_element(ENABLE_NODE, &no_debug_bgp_bgpsec_cmd);
+	install_element(CONFIG_NODE, &no_debug_bgp_bgpsec_cmd);
 }
 
 /* Return true if this prefix is on the per_prefix_list of prefixes to debug
