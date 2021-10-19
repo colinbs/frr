@@ -1527,6 +1527,13 @@ static struct cmd_node rpki_node = {
 };
 #endif /* HAVE_BGPD */
 
+/*static struct cmd_node bgpsec_node = {*/
+    /*.name = "bgpsec",*/
+    /*.node = BGPSEC_NODE,*/
+    /*.parent_node = CONFIG_NODE,*/
+    /*.prompt = "%s(config-bgpsec)# ",*/
+/*};*/
+
 #if HAVE_BFDD > 0
 static struct cmd_node bfd_node = {
 	.name = "bfd",
@@ -2329,11 +2336,11 @@ DEFUNSH(VTYSH_BGPD, bmp_quit, bmp_quit_cmd, "quit",
 #endif /* HAVE_BGPD */
 
 DEFUNSH(VTYSH_VRF, exit_vrf_config, exit_vrf_config_cmd, "exit-vrf",
-	"Exit from VRF configuration mode\n")
+	"Exit current mode and down to previous mode\n")
 {
-	if (vty->node == VRF_NODE)
+    if (vty->node == VRF_NODE)
 		vty->node = CONFIG_NODE;
-	return CMD_SUCCESS;
+    return CMD_SUCCESS;
 }
 
 DEFUNSH(VTYSH_ZEBRA, exit_srv6_config, exit_srv6_config_cmd, "exit",
@@ -4049,6 +4056,31 @@ void vtysh_init_vty(void)
 	install_element(BGP_VNC_L2_GROUP_NODE, &vtysh_end_all_cmd);
 	install_element(BGP_VNC_L2_GROUP_NODE, &exit_vnc_config_cmd);
 #endif
+	install_node(&ospf_node);
+	install_node(&eigrp_node);
+	install_node(&babel_node);
+	install_node(&ripng_node);
+	install_node(&ospf6_node);
+	install_node(&ldp_node);
+	install_node(&ldp_ipv4_node);
+	install_node(&ldp_ipv6_node);
+	install_node(&ldp_ipv4_iface_node);
+	install_node(&ldp_ipv6_iface_node);
+	install_node(&ldp_l2vpn_node);
+	install_node(&ldp_pseudowire_node);
+	install_node(&keychain_node);
+	install_node(&keychain_key_node);
+	install_node(&isis_node);
+	install_node(&openfabric_node);
+	install_node(&vty_node);
+	install_node(&rpki_node);
+	install_node(&bmp_node);
+	/*install_node(&bgpsec_node);*/
+#if HAVE_BFDD > 0
+	install_node(&bfd_node);
+	install_node(&bfd_peer_node);
+	install_node(&bfd_profile_node);
+#endif /* HAVE_BFDD */
 
 	install_node(&bgp_evpn_node);
 	install_element(BGP_NODE, &address_family_evpn_cmd);
