@@ -689,7 +689,7 @@ AC_ARG_ENABLE([protobuf],
 AC_ARG_ENABLE([oldvpn_commands],
   AS_HELP_STRING([--enable-oldvpn-commands], [Keep old vpn commands]))
 AC_ARG_ENABLE([rpki],
-  AS_HELP_STRING([--enable-rpki], [enable RPKI prefix validation support]))
+  AS_HELP_STRING([--enable-rpki], [enable RPKI prefix validation and BGPsec support]))
 AC_ARG_ENABLE([clippy-only],
   AS_HELP_STRING([--enable-clippy-only], [Only build clippy]))
 AC_ARG_ENABLE([numeric_version],
